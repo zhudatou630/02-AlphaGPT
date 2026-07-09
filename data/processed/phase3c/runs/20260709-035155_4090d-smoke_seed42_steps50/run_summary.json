@@ -1,0 +1,54 @@
+{
+  "run_id": "20260709-035155_4090d-smoke_seed42_steps50",
+  "run_dir": "/root/autodl-tmp/02-AlphaGPT/data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50",
+  "device": "cuda",
+  "preset": "4090d-smoke",
+  "device_info": {
+    "device_name": "NVIDIA GeForce RTX 4090 D",
+    "cuda_total_memory_mb": 24080
+  },
+  "total_sampled": 51200,
+  "best_reward": 0.007768308403546461,
+  "reload_max_abs_diff": 0.0,
+  "total_seconds": 345.567965246737,
+  "avg_step_seconds": 6.366172679215669,
+  "avg_formulas_per_second": 160.88764035981353,
+  "train_config": {
+    "seed": 42,
+    "batch_size": 1024,
+    "train_steps": 50,
+    "max_len": 16,
+    "min_formula_len": 3,
+    "top_n": 20,
+    "learning_rate": 0.0003,
+    "weight_decay": 1e-05,
+    "gradient_clip_norm": 1.0,
+    "entropy_coef": 0.0
+  },
+  "model_config": {
+    "model_vocab_size": 28,
+    "max_sequence_len": 18,
+    "d_model": 64,
+    "num_layers": 2,
+    "num_heads": 4,
+    "ff_dim": 128,
+    "dropout": 0.1,
+    "use_critic_head": false
+  },
+  "score_config": {
+    "horizon": 10,
+    "min_coverage": 0.2,
+    "constant_std_eps": 1e-12,
+    "hard_invalid_reward": -5.0,
+    "weak_invalid_reward": -2.0,
+    "reward_name": "scorer_mean_return"
+  },
+  "outputs": {
+    "checkpoint": "/root/autodl-tmp/02-AlphaGPT/data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/checkpoint.pt",
+    "training_log": "/root/autodl-tmp/02-AlphaGPT/data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/training_log.csv",
+    "gpu_candidate_formulas": "/root/autodl-tmp/02-AlphaGPT/data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/gpu_candidate_formulas.csv",
+    "best_formulas_jsonl": "/root/autodl-tmp/02-AlphaGPT/data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/best_formulas.jsonl",
+    "best_formulas_csv": "/root/autodl-tmp/02-AlphaGPT/data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/best_formulas.csv",
+    "validator_summary": "/root/autodl-tmp/02-AlphaGPT/data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/phase3c_validator_summary.csv"
+  }
+}
