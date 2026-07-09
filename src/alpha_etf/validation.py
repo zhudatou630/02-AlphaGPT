@@ -61,6 +61,55 @@ def _rank_desc(signal_t: np.ndarray, eligible: np.ndarray) -> np.ndarray:
     return ranks
 
 
+def rank_only_signal(signal: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Convert raw generated-formula values into positive cross-sectional rank scores."""
+
+    out = np.full(signal.shape, np.nan, dtype=float)
+    for t in range(signal.shape[1]):
+        eligible = mask[:, t] & np.isfinite(signal[:, t])
+        ranks = _rank_desc(signal[:, t], eligible)
+        eligible_count = int(np.isfinite(ranks).sum())
+        if eligible_count == 0:
+            continue
+        out[np.isfinite(ranks), t] = eligible_count - ranks[np.isfinite(ranks)] + 1.0
+    return out
+
+
+def run_rank_only_validator(
+    formula: str,
+    signal: np.ndarray,
+    open_prices: np.ndarray,
+    close_prices: np.ndarray,
+    mask: np.ndarray,
+    dates: pd.DatetimeIndex,
+    symbols: np.ndarray,
+    config: ValidatorConfig,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float]]:
+    """Run validator on rank-only positive scores for generated formulas.
+
+    The existing validator intentionally keeps Phase2B's `signal > 0` entry
+    rule. Generated formulas often only have ranking meaning, so this wrapper
+    replaces raw values with positive cross-sectional ranks and leaves the rest
+    of the trading audit unchanged.
+    """
+
+    rank_signal = rank_only_signal(signal, mask)
+    variant = config.validator_variant or _variant(config)
+    rank_config = ValidatorConfig(
+        horizon=config.horizon,
+        validator_variant=f"rank_only_{variant}",
+        max_holding_days=config.max_holding_days,
+        transaction_cost_bps=config.transaction_cost_bps,
+        min_universe=config.min_universe,
+        slots=config.slots,
+        buy_rank=config.buy_rank,
+        hold_rank=config.hold_rank,
+        stop_loss=config.stop_loss,
+        initial_cash=config.initial_cash,
+    )
+    return run_validator(formula, rank_signal, open_prices, close_prices, mask, dates, symbols, rank_config)
+
+
 
 def _first_start(mask: np.ndarray, min_universe: int) -> int:
     counts = mask.sum(axis=0)

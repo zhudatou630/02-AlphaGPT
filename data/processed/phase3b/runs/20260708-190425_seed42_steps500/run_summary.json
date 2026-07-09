@@ -1,0 +1,48 @@
+{
+  "run_id": "20260708-190425_seed42_steps500",
+  "run_dir": "/home/zhujunshen/Quant/02-AlphaGPT/data/processed/phase3b/runs/20260708-190425_seed42_steps500",
+  "device": "cpu",
+  "total_sampled": 32000,
+  "valid_count": 31584,
+  "invalid_count": 416,
+  "best_reward": 0.006878246107346835,
+  "reload_max_abs_diff": 0.0,
+  "train_config": {
+    "seed": 42,
+    "batch_size": 64,
+    "train_steps": 500,
+    "max_len": 16,
+    "min_formula_len": 3,
+    "top_n": 20,
+    "learning_rate": 0.0003,
+    "weight_decay": 1e-05,
+    "gradient_clip_norm": 1.0,
+    "entropy_coef": 0.0
+  },
+  "model_config": {
+    "model_vocab_size": 28,
+    "max_sequence_len": 18,
+    "d_model": 64,
+    "num_layers": 2,
+    "num_heads": 4,
+    "ff_dim": 128,
+    "dropout": 0.1,
+    "use_critic_head": false
+  },
+  "score_config": {
+    "horizon": 10,
+    "min_coverage": 0.2,
+    "constant_std_eps": 1e-12,
+    "hard_invalid_reward": -5.0,
+    "weak_invalid_reward": -2.0,
+    "reward_name": "scorer_mean_return"
+  },
+  "outputs": {
+    "checkpoint": "/home/zhujunshen/Quant/02-AlphaGPT/data/processed/phase3b/runs/20260708-190425_seed42_steps500/checkpoint.pt",
+    "training_log": "/home/zhujunshen/Quant/02-AlphaGPT/data/processed/phase3b/runs/20260708-190425_seed42_steps500/training_log.csv",
+    "sampled_formulas": "/home/zhujunshen/Quant/02-AlphaGPT/data/processed/phase3b/runs/20260708-190425_seed42_steps500/sampled_formulas.csv",
+    "best_formulas_jsonl": "/home/zhujunshen/Quant/02-AlphaGPT/data/processed/phase3b/runs/20260708-190425_seed42_steps500/best_formulas.jsonl",
+    "best_formulas_csv": "/home/zhujunshen/Quant/02-AlphaGPT/data/processed/phase3b/runs/20260708-190425_seed42_steps500/best_formulas.csv",
+    "validator_summary": "/home/zhujunshen/Quant/02-AlphaGPT/data/processed/phase3b/runs/20260708-190425_seed42_steps500/phase3b_validator_summary.csv"
+  }
+}

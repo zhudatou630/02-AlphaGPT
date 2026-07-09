@@ -12,6 +12,7 @@ dist/
 *.egg-info/
 
 # Local environments and secrets
+.venv/
 .env
 .env.*
 !.env.example
@@ -26,6 +27,9 @@ dist/
 Thumbs.db
 .idea/
 .vscode/
+
+# Local agent runtime artifacts
+.pi-subagents/
 
 # External reference checkout contains its own .git and a hardcoded token file.
 # Keep it local; use the upstream/fork URL as the source of truth instead.
