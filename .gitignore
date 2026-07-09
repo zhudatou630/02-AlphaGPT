@@ -30,6 +30,8 @@ Thumbs.db
 
 # Local agent runtime artifacts
 .pi-subagents/
+.pi/local/
+AGENTS.md
 
 # External reference checkout contains its own .git and a hardcoded token file.
 # Keep it local; use the upstream/fork URL as the source of truth instead.
