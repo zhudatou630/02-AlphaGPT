@@ -74,6 +74,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--save-sampled-formulas", action="store_true")
     parser.add_argument("--resume-from", type=Path, help="resume Phase3c training from checkpoint_latest.pt or checkpoint.pt")
     parser.add_argument("--checkpoint-every-steps", type=int, default=10)
+    parser.add_argument("--eval-chunk-size", type=int, help="number of formulas per GPU VM/scorer chunk")
     return parser.parse_args()
 
 
@@ -155,6 +156,14 @@ def _resolved_use_rmsnorm(args: argparse.Namespace) -> bool:
 
 def _resolved_use_swiglu(args: argparse.Namespace) -> bool:
     return bool(args.use_swiglu or _uses_rms_swiglu_preset(args))
+
+
+def _resolved_eval_chunk_size(args: argparse.Namespace, batch_size: int) -> int:
+    if args.eval_chunk_size is not None:
+        return int(args.eval_chunk_size)
+    if _uses_rms_swiglu_preset(args):
+        return min(batch_size, 256)
+    return batch_size
 
 
 def _set_seeds(seed: int) -> None:
@@ -459,6 +468,45 @@ def _save_phase3c_checkpoint(
     _atomic_torch_save(checkpoint, path)
 
 
+def _cat_score_results(parts: list[BatchScoreResult]) -> BatchScoreResult:
+    if not parts:
+        raise ValueError("score result parts must not be empty")
+    return BatchScoreResult(
+        reward=torch.cat([part.reward for part in parts], dim=0),
+        valid=torch.cat([part.valid for part in parts], dim=0),
+        invalid_code=torch.cat([part.invalid_code for part in parts], dim=0),
+        finite_count=torch.cat([part.finite_count for part in parts], dim=0),
+        coverage=torch.cat([part.coverage for part in parts], dim=0),
+        finite_std=torch.cat([part.finite_std for part in parts], dim=0),
+        scorer_days=torch.cat([part.scorer_days for part in parts], dim=0),
+        scorer_mean_return=torch.cat([part.scorer_mean_return for part in parts], dim=0),
+        scorer_hit_rate=torch.cat([part.scorer_hit_rate for part in parts], dim=0),
+        avg_top_k=torch.cat([part.avg_top_k for part in parts], dim=0),
+        max_abs_signal=torch.cat([part.max_abs_signal for part in parts], dim=0),
+    )
+
+
+def _score_formulas_in_chunks(
+    *,
+    formulas: list[list[int]],
+    device: torch.device,
+    vm: BatchTorchVM,
+    panel: TorchMarketPanel,
+    score_config: FormulaScoreConfig,
+    chunk_size: int,
+) -> BatchScoreResult:
+    if chunk_size < 1:
+        raise ValueError("eval chunk size must be positive")
+    parts: list[BatchScoreResult] = []
+    for start in range(0, len(formulas), chunk_size):
+        chunk = formulas[start : start + chunk_size]
+        token_tensor, lengths = formulas_to_tensor(chunk, device=device)
+        vm_result = vm.execute(token_tensor, lengths, panel)
+        parts.append(score_vm_batch(vm_result, panel, score_config))
+        del token_tensor, lengths, vm_result
+    return _cat_score_results(parts)
+
+
 def main() -> None:
     args = _parse_args()
     resume_checkpoint: dict[str, Any] | None = None
@@ -506,6 +554,9 @@ def main() -> None:
         raise ValueError("train steps must be positive")
     if max_len < args.min_formula_len:
         raise ValueError("max_len must be >= min_formula_len")
+    eval_chunk_size = _resolved_eval_chunk_size(args, batch_size)
+    if eval_chunk_size < 1:
+        raise ValueError("eval chunk size must be positive")
     if args.top_n < 1:
         raise ValueError("top_n must be positive")
     if args.cpu_audit_candidates < args.top_n:
@@ -595,15 +646,17 @@ def main() -> None:
         sample_seconds = time.perf_counter() - sample_start
 
         with torch.no_grad():
-            vm_start = time.perf_counter()
-            token_tensor, lengths = formulas_to_tensor(sample.formulas, device=device)
-            vm_result = vm.execute(token_tensor, lengths, torch_panel)
-            _sync(device)
-            vm_seconds = time.perf_counter() - vm_start
-
             score_start = time.perf_counter()
-            score = score_vm_batch(vm_result, torch_panel, score_config)
+            score = _score_formulas_in_chunks(
+                formulas=sample.formulas,
+                device=device,
+                vm=vm,
+                panel=torch_panel,
+                score_config=score_config,
+                chunk_size=eval_chunk_size,
+            )
             _sync(device)
+            vm_seconds = float("nan")
             score_seconds = time.perf_counter() - score_start
 
         rewards = score.reward.detach()
@@ -662,6 +715,7 @@ def main() -> None:
                 "cuda_memory_allocated_mb": mem_alloc,
                 "cuda_memory_reserved_mb": mem_reserved,
                 "avg_allowed_actions": sample.avg_allowed_actions,
+                "eval_chunk_size": int(eval_chunk_size),
             }
         )
         if step == 1 or step == train_steps or step % max(train_steps // 10, 1) == 0:
@@ -794,6 +848,7 @@ def main() -> None:
         "train_config": train_config.to_dict(),
         "model_config": model_config.to_dict(),
         "score_config": score_config.to_dict(),
+        "eval_chunk_size": int(eval_chunk_size),
         "outputs": outputs,
     }
     summary_path = run_dir / "run_summary.json"
