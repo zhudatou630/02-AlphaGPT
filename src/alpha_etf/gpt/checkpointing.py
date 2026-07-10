@@ -9,8 +9,11 @@ from typing import Any
 import numpy as np
 import torch
 
+from alpha_etf.gpt.vocab import FormulaVocab
+
 
 CHECKPOINT_SCHEMA_VERSION = "phase3b-checkpoint-v1"
+CHECKPOINT_SCHEMA_VERSION_V2 = "etf-price-checkpoint-v2"
 
 
 @dataclass(frozen=True)
@@ -64,9 +67,12 @@ def build_checkpoint(
     best_formulas: list[dict[str, Any]],
     best_reward: float | None,
     run_id: str,
+    research_spec: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
-        "schema_version": CHECKPOINT_SCHEMA_VERSION,
+    checkpoint = {
+        "schema_version": (
+            CHECKPOINT_SCHEMA_VERSION_V2 if research_spec is not None else CHECKPOINT_SCHEMA_VERSION
+        ),
         "run_id": run_id,
         "step": int(step),
         "model_state_dict": model.state_dict(),
@@ -81,3 +87,28 @@ def build_checkpoint(
         "best_reward": best_reward,
         "rng_state": rng_state_dict(),
     }
+    if research_spec is not None:
+        checkpoint["research_spec"] = research_spec
+    return checkpoint
+
+
+def validate_checkpoint_contract(
+    checkpoint: dict[str, Any],
+    *,
+    vocab: FormulaVocab,
+    research_spec: dict[str, Any],
+) -> None:
+    if checkpoint.get("schema_version") != CHECKPOINT_SCHEMA_VERSION_V2:
+        raise RuntimeError(
+            f"Checkpoint schema mismatch: {checkpoint.get('schema_version')} != {CHECKPOINT_SCHEMA_VERSION_V2}"
+        )
+    expected_vocab = {"vocab_version": vocab.version, "token_names": vocab.token_names}
+    actual_vocab = checkpoint.get("formula_vocab", {})
+    actual_vocab = {
+        "vocab_version": actual_vocab.get("vocab_version"),
+        "token_names": tuple(actual_vocab.get("token_names", ())),
+    }
+    if actual_vocab != expected_vocab:
+        raise RuntimeError(f"Checkpoint formula vocab mismatch: {actual_vocab} != {expected_vocab}")
+    if checkpoint.get("research_spec") != research_spec:
+        raise RuntimeError("Checkpoint research spec mismatch")

@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 from pathlib import Path
 import random
 import sys
 import time
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -19,7 +20,7 @@ import torch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from alpha_etf.gpt.checkpointing import TrainConfig, build_checkpoint
+from alpha_etf.gpt.checkpointing import TrainConfig, build_checkpoint, validate_checkpoint_contract
 from alpha_etf.gpt.evaluation import (
     FormulaScoreConfig,
     artifact_from_row,
@@ -34,7 +35,7 @@ from alpha_etf.gpt.sampling import PolicyVocab, SamplingConfig, sample_formulas
 from alpha_etf.gpt.torch_scoring import INVALID_CODE_TO_REASON as SCORE_REASON
 from alpha_etf.gpt.torch_scoring import BatchScoreResult, score_vm_batch
 from alpha_etf.gpt.torch_vm import BatchTorchVM, TorchMarketPanel, formulas_to_tensor
-from alpha_etf.gpt.vocab import FORMULA_VOCAB, VOCAB_VERSION
+from alpha_etf.gpt.vocab import FORMULA_VOCAB, FormulaVocab
 from alpha_etf.panel import load_market_panel
 from alpha_etf.validation import ValidatorConfig, run_rank_only_validator, run_validator
 
@@ -44,7 +45,30 @@ HORIZON = 10
 TRANSACTION_COST_BPS = 5.0
 
 
-def _parse_args() -> argparse.Namespace:
+@dataclass(frozen=True)
+class TrainingRuntime:
+    vocab: FormulaVocab
+    panel_loader: Callable[[], Any]
+    default_out_root: Path
+    research_spec_factory: Callable[[dict[str, Any]], dict[str, Any]] | None = None
+    formula_prefix: str = "phase3c_gpu"
+    train_source: str = "phase3c_gpu_train"
+    audit_source: str = "phase3c_cpu_audit"
+    validator_filename: str = "phase3c_validator_summary.csv"
+
+
+V1_RUNTIME = TrainingRuntime(
+    vocab=FORMULA_VOCAB,
+    panel_loader=load_market_panel,
+    default_out_root=OUT_ROOT,
+)
+
+
+def _cli_has(option: str) -> bool:
+    return option in sys.argv[1:] or any(item.startswith(option + "=") for item in sys.argv[1:])
+
+
+def _parse_args(default_out_root: Path) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--preset", choices=("", "4090d-smoke", "4090d", "4090d-rms-swiglu-smoke", "4090d-rms-swiglu"), default="")
@@ -67,7 +91,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--use-swiglu", action="store_true")
     parser.add_argument("--min-coverage", type=float, default=0.20)
     parser.add_argument("--constant-std-eps", type=float, default=1e-12)
-    parser.add_argument("--out-root", type=Path, default=OUT_ROOT)
+    parser.add_argument("--out-root", type=Path, default=default_out_root)
     parser.add_argument("--run-id", type=str, default="")
     parser.add_argument("--device", type=str, default="auto", choices=("auto", "cpu", "cuda"))
     parser.add_argument("--skip-validator", action="store_true")
@@ -264,14 +288,20 @@ def _validator_configs() -> tuple[ValidatorConfig, ...]:
     )
 
 
-def _validator_audit(artifacts: list[dict[str, Any]], panel, score_config: FormulaScoreConfig) -> pd.DataFrame:
+def _validator_audit(
+    artifacts: list[dict[str, Any]],
+    panel,
+    score_config: FormulaScoreConfig,
+    vocab: FormulaVocab,
+    research_spec: dict[str, Any] | None,
+) -> pd.DataFrame:
     from alpha_etf.gpt.vm import StackVM
 
-    vm = StackVM()
+    vm = StackVM(vocab)
     rows = []
     for artifact in artifacts:
         formula_id = str(artifact["formula_id"])
-        token_ids = validate_artifact(artifact, score_config)
+        token_ids = validate_artifact(artifact, score_config, vocab, research_spec)
         result = vm.execute(token_ids, panel)
         if not result.valid or result.signal is None:
             raise RuntimeError(f"Validator artifact invalid: {formula_id} {result.invalid_reason}")
@@ -309,12 +339,12 @@ def _json_default(value: Any) -> Any:
     raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
-def _token_text(token_ids: list[int]) -> tuple[str, str, str]:
+def _token_text(token_ids: list[int], vocab: FormulaVocab) -> tuple[str, str, str]:
     from alpha_etf.gpt.evaluation import decode_rpn
 
     token_ids_text = " ".join(str(token_id) for token_id in token_ids)
-    token_names = FORMULA_VOCAB.decode(token_ids)
-    return token_ids_text, " ".join(token_names), decode_rpn(token_ids)
+    token_names = vocab.decode(token_ids)
+    return token_ids_text, " ".join(token_names), decode_rpn(token_ids, vocab)
 
 
 def _row_from_gpu_score(
@@ -326,13 +356,14 @@ def _row_from_gpu_score(
     sample_idx: int,
     score: BatchScoreResult,
     score_idx: int,
+    vocab: FormulaVocab,
 ) -> dict[str, Any]:
-    token_ids_text, token_names_text, decoded_formula = _token_text(token_ids)
+    token_ids_text, token_names_text, decoded_formula = _token_text(token_ids, vocab)
     invalid_code = int(score.invalid_code[score_idx].detach().cpu().item())
     return {
         "formula_id": formula_id,
         "source": source,
-        "vocab_version": VOCAB_VERSION,
+        "vocab_version": vocab.version,
         "token_ids": token_ids_text,
         "token_names": token_names_text,
         "decoded_formula": decoded_formula,
@@ -362,6 +393,9 @@ def _update_best_candidates(
     score: BatchScoreResult,
     step: int,
     keep_n: int,
+    vocab: FormulaVocab,
+    formula_prefix: str,
+    source: str,
 ) -> None:
     valid = score.valid.detach()
     if not bool(valid.any().item()):
@@ -373,13 +407,14 @@ def _update_best_candidates(
         token_ids = formulas[int(idx)]
         token_key = " ".join(str(item) for item in token_ids)
         row = _row_from_gpu_score(
-            formula_id=f"phase3c_gpu_{step:06d}_{int(idx):04d}",
-            source="phase3c_gpu_train",
+            formula_id=f"{formula_prefix}_{step:06d}_{int(idx):04d}",
+            source=source,
             token_ids=token_ids,
             step=step,
             sample_idx=int(idx),
             score=score,
             score_idx=int(idx),
+            vocab=vocab,
         )
         old = candidates.get(token_key)
         if old is None or float(row["reward"]) > float(old["reward"]):
@@ -395,20 +430,23 @@ def _audit_candidates_cpu(
     panel,
     score_config: FormulaScoreConfig,
     top_n: int,
+    vocab: FormulaVocab,
+    source: str,
 ) -> pd.DataFrame:
     from alpha_etf.gpt.vm import StackVM
 
-    vm = StackVM()
+    vm = StackVM(vocab)
     rows = []
     for rank, candidate in enumerate(gpu_candidates):
         token_ids = [int(item) for item in str(candidate["token_ids"]).split()]
         row, _ = score_token_formula(
             formula_id=str(candidate["formula_id"]),
-            source="phase3c_cpu_audit",
+            source=source,
             token_ids=token_ids,
             panel=panel,
             vm=vm,
             config=score_config,
+            vocab=vocab,
         )
         row.update(
             {
@@ -445,6 +483,9 @@ def _save_phase3c_checkpoint(
     run_id: str,
     best_formulas: list[dict[str, Any]] | None = None,
     best_reward: float | None = None,
+    vocab: FormulaVocab,
+    research_spec: dict[str, Any] | None,
+    runtime_config: dict[str, Any],
 ) -> None:
     if best_reward is None:
         best_reward = max((float(row["reward"]) for row in best_candidates.values()), default=None)
@@ -454,16 +495,18 @@ def _save_phase3c_checkpoint(
         optimizer=optimizer,
         model_config=model_config.to_dict(),
         policy_vocab={"token_names": policy_vocab.token_names, "special_tokens": policy_vocab.special_tokens},
-        formula_vocab={"vocab_version": VOCAB_VERSION, "token_names": FORMULA_VOCAB.token_names},
+        formula_vocab={"vocab_version": vocab.version, "token_names": vocab.token_names},
         scorer_config=score_config.to_dict(),
         train_config=train_config.to_dict(),
         best_formulas=best_formulas or [],
         best_reward=best_reward,
         run_id=run_id,
+        research_spec=research_spec,
     )
     checkpoint["phase3c_state"] = {
         "best_candidates": best_candidates,
         "log_rows": log_rows,
+        "runtime_config": runtime_config,
     }
     _atomic_torch_save(checkpoint, path)
 
@@ -507,8 +550,9 @@ def _score_formulas_in_chunks(
     return _cat_score_results(parts)
 
 
-def main() -> None:
-    args = _parse_args()
+def main(runtime: TrainingRuntime = V1_RUNTIME) -> None:
+    args = _parse_args(runtime.default_out_root)
+    vocab = runtime.vocab
     resume_checkpoint: dict[str, Any] | None = None
     if args.resume_from is not None:
         if not args.resume_from.exists():
@@ -516,6 +560,10 @@ def main() -> None:
         resume_checkpoint = torch.load(args.resume_from, map_location="cpu")
         train_dict = dict(resume_checkpoint["train_config"])
         model_dict = dict(resume_checkpoint["model_config"])
+        saved_score_dict = dict(resume_checkpoint["scorer_config"])
+        saved_runtime_dict = dict(
+            resume_checkpoint.get("phase3c_state", {}).get("runtime_config", {})
+        )
         batch_size = int(train_dict["batch_size"])
         train_steps = int(args.train_steps if args.train_steps is not None else train_dict["train_steps"])
         if train_steps < int(resume_checkpoint["step"]):
@@ -524,6 +572,33 @@ def main() -> None:
         max_len = int(train_dict["max_len"])
         entropy_coef = float(train_dict.get("entropy_coef", 0.0))
         args.min_formula_len = int(train_dict["min_formula_len"])
+        restored_values = {
+            "--top-n": (args.top_n, int(train_dict["top_n"])),
+            "--grad-clip": (args.grad_clip, float(train_dict["gradient_clip_norm"])),
+            "--min-coverage": (args.min_coverage, float(saved_score_dict["min_coverage"])),
+            "--constant-std-eps": (
+                args.constant_std_eps,
+                float(saved_score_dict["constant_std_eps"]),
+            ),
+        }
+        for option, (requested, saved) in restored_values.items():
+            if _cli_has(option) and requested != saved:
+                raise ValueError(f"{option} cannot change when resuming: {requested} != {saved}")
+        args.top_n = int(train_dict["top_n"])
+        args.grad_clip = float(train_dict["gradient_clip_norm"])
+        args.lr = float(train_dict["learning_rate"])
+        args.weight_decay = float(train_dict["weight_decay"])
+        args.min_coverage = float(saved_score_dict["min_coverage"])
+        args.constant_std_eps = float(saved_score_dict["constant_std_eps"])
+        saved_audit_candidates = int(
+            saved_runtime_dict.get("cpu_audit_candidates", args.cpu_audit_candidates)
+        )
+        if _cli_has("--cpu-audit-candidates") and args.cpu_audit_candidates != saved_audit_candidates:
+            raise ValueError(
+                "--cpu-audit-candidates cannot change when resuming: "
+                f"{args.cpu_audit_candidates} != {saved_audit_candidates}"
+            )
+        args.cpu_audit_candidates = saved_audit_candidates
     else:
         batch_size = _resolved_batch_size(args)
         train_steps = _resolved_train_steps(args)
@@ -555,6 +630,11 @@ def main() -> None:
     if max_len < args.min_formula_len:
         raise ValueError("max_len must be >= min_formula_len")
     eval_chunk_size = _resolved_eval_chunk_size(args, batch_size)
+    runtime_config = {
+        "cpu_audit_candidates": int(args.cpu_audit_candidates),
+        "eval_chunk_size": int(eval_chunk_size),
+        "checkpoint_every_steps": int(args.checkpoint_every_steps),
+    }
     if eval_chunk_size < 1:
         raise ValueError("eval chunk size must be positive")
     if args.top_n < 1:
@@ -563,6 +643,26 @@ def main() -> None:
         raise ValueError("cpu audit candidates must be >= top_n")
     if args.checkpoint_every_steps < 1:
         raise ValueError("checkpoint_every_steps must be positive")
+
+    if resume_checkpoint is not None:
+        if int(saved_score_dict["horizon"]) != HORIZON:
+            raise ValueError(
+                f"Checkpoint scorer horizon is incompatible: {saved_score_dict['horizon']} != {HORIZON}"
+            )
+        score_config = FormulaScoreConfig(**saved_score_dict)
+    else:
+        score_config = FormulaScoreConfig(
+            horizon=HORIZON,
+            min_coverage=args.min_coverage,
+            constant_std_eps=args.constant_std_eps,
+        )
+    research_spec = (
+        runtime.research_spec_factory(score_config.to_dict())
+        if runtime.research_spec_factory is not None
+        else None
+    )
+    if resume_checkpoint is not None and research_spec is not None:
+        validate_checkpoint_contract(resume_checkpoint, vocab=vocab, research_spec=research_spec)
 
     try:
         torch.set_float32_matmul_precision("high")
@@ -587,16 +687,11 @@ def main() -> None:
         run_dir.mkdir(parents=True, exist_ok=False)
         args.out_root.mkdir(parents=True, exist_ok=True)
 
-    panel = load_market_panel()
+    panel = runtime.panel_loader()
     torch_panel = TorchMarketPanel.from_market_panel(panel, device=device, dtype=torch.float32)
-    vm = BatchTorchVM()
-    policy_vocab = PolicyVocab(FORMULA_VOCAB)
+    vm = BatchTorchVM(vocab)
+    policy_vocab = PolicyVocab(vocab)
     sampling_config = SamplingConfig(max_len=max_len, min_formula_len=args.min_formula_len)
-    score_config = FormulaScoreConfig(
-        horizon=HORIZON,
-        min_coverage=args.min_coverage,
-        constant_std_eps=args.constant_std_eps,
-    )
     train_config = TrainConfig(
         seed=args.seed,
         batch_size=batch_size,
@@ -674,18 +769,28 @@ def main() -> None:
         _sync(device)
         backward_seconds = time.perf_counter() - backward_start
 
-        _update_best_candidates(best_candidates, sample.formulas, score, step, candidate_keep_n)
+        _update_best_candidates(
+            best_candidates,
+            sample.formulas,
+            score,
+            step,
+            candidate_keep_n,
+            vocab,
+            runtime.formula_prefix,
+            runtime.train_source,
+        )
         if args.save_sampled_formulas:
             for i, token_ids in enumerate(sample.formulas):
                 sampled_rows.append(
                     _row_from_gpu_score(
-                        formula_id=f"phase3c_gpu_{step:06d}_{i:04d}",
-                        source="phase3c_gpu_train",
+                        formula_id=f"{runtime.formula_prefix}_{step:06d}_{i:04d}",
+                        source=runtime.train_source,
                         token_ids=token_ids,
                         step=step,
                         sample_idx=i,
                         score=score,
                         score_idx=i,
+                        vocab=vocab,
                     )
                 )
 
@@ -742,6 +847,9 @@ def main() -> None:
                 best_candidates=best_candidates,
                 log_rows=log_rows,
                 run_id=run_id,
+                vocab=vocab,
+                research_spec=research_spec,
+                runtime_config=runtime_config,
             )
 
     log_df = pd.DataFrame(log_rows)
@@ -757,20 +865,32 @@ def main() -> None:
     gpu_candidates_path = run_dir / "gpu_candidate_formulas.csv"
     pd.DataFrame(gpu_candidates).to_csv(gpu_candidates_path, index=False)
 
-    best_df = _audit_candidates_cpu(gpu_candidates, panel, score_config, args.top_n)
+    best_df = _audit_candidates_cpu(
+        gpu_candidates, panel, score_config, args.top_n, vocab, runtime.audit_source
+    )
     best_csv_path = run_dir / "best_formulas.csv"
     best_df.to_csv(best_csv_path, index=False)
 
     created_at = datetime.now(timezone.utc).isoformat()
     best_records = best_df.to_dict("records") if not best_df.empty else []
-    artifacts = [artifact_from_row(record, score_config, created_at) for record in best_records]
+    artifacts = [
+        artifact_from_row(record, score_config, created_at, vocab, research_spec)
+        for record in best_records
+    ]
     best_jsonl_path = run_dir / "best_formulas.jsonl"
     write_jsonl(best_jsonl_path, artifacts)
 
     loaded_artifacts = load_jsonl(best_jsonl_path)
     from alpha_etf.gpt.vm import StackVM
 
-    reloaded_rewards = rescore_loaded_artifacts(loaded_artifacts, panel, StackVM(), score_config)
+    reloaded_rewards = rescore_loaded_artifacts(
+        loaded_artifacts,
+        panel,
+        StackVM(vocab),
+        score_config,
+        vocab,
+        research_spec,
+    )
     if not best_df.empty:
         best_df["reloaded_reward"] = best_df["formula_id"].map(reloaded_rewards)
         best_df["reward_abs_diff"] = (best_df["reward"].astype(float) - best_df["reloaded_reward"].astype(float)).abs()
@@ -784,8 +904,8 @@ def main() -> None:
     if args.skip_validator or not loaded_artifacts:
         validator_df = pd.DataFrame()
     else:
-        validator_df = _validator_audit(loaded_artifacts, panel, score_config)
-    validator_path = run_dir / "phase3c_validator_summary.csv"
+        validator_df = _validator_audit(loaded_artifacts, panel, score_config, vocab, research_spec)
+    validator_path = run_dir / runtime.validator_filename
     validator_df.to_csv(validator_path, index=False)
 
     best_reward = float(best_records[0]["reward"]) if best_records else None
@@ -804,6 +924,9 @@ def main() -> None:
         best_formulas=loaded_artifacts,
         best_reward=best_reward,
         run_id=run_id,
+        vocab=vocab,
+        research_spec=research_spec,
+        runtime_config=runtime_config,
     )
     _save_phase3c_checkpoint(
         path=latest_checkpoint_path,
@@ -819,6 +942,9 @@ def main() -> None:
         best_formulas=loaded_artifacts,
         best_reward=best_reward,
         run_id=run_id,
+        vocab=vocab,
+        research_spec=research_spec,
+        runtime_config=runtime_config,
     )
 
     total_seconds = time.perf_counter() - run_start
@@ -848,6 +974,7 @@ def main() -> None:
         "train_config": train_config.to_dict(),
         "model_config": model_config.to_dict(),
         "score_config": score_config.to_dict(),
+        "research_spec": research_spec,
         "eval_chunk_size": int(eval_chunk_size),
         "outputs": outputs,
     }
@@ -860,7 +987,7 @@ def main() -> None:
     print(f"training_log: {training_log_path}")
     print(f"gpu_candidate_formulas: {gpu_candidates_path} ({len(gpu_candidates)} rows)")
     print(f"best_formulas_jsonl: {best_jsonl_path} ({len(loaded_artifacts)} rows)")
-    print(f"phase3c_validator_summary: {validator_path} ({len(validator_df)} rows)")
+    print(f"validator_summary: {validator_path} ({len(validator_df)} rows)")
 
 
 if __name__ == "__main__":

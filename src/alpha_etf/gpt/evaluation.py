@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 
 from alpha_etf.gpt.vm import StackVM, check_signal_quality
-from alpha_etf.gpt.vocab import FORMULA_VOCAB, VOCAB_VERSION
+from alpha_etf.gpt.vocab import FORMULA_VOCAB, FormulaVocab
 from alpha_etf.panel import MarketPanel
 from alpha_etf.scoring import ScorerConfig, score_signal
 
@@ -39,16 +39,18 @@ def empty_scorer_fields() -> dict[str, float]:
     }
 
 
-def formula_text(token_ids: list[int]) -> tuple[str, str, str]:
-    token_names = FORMULA_VOCAB.decode(token_ids)
-    return " ".join(str(token_id) for token_id in token_ids), " ".join(token_names), decode_rpn(token_ids)
+def formula_text(
+    token_ids: list[int], vocab: FormulaVocab = FORMULA_VOCAB
+) -> tuple[str, str, str]:
+    token_names = vocab.decode(token_ids)
+    return " ".join(str(token_id) for token_id in token_ids), " ".join(token_names), decode_rpn(token_ids, vocab)
 
 
-def decode_rpn(token_ids: list[int]) -> str:
+def decode_rpn(token_ids: list[int], vocab: FormulaVocab = FORMULA_VOCAB) -> str:
     stack: list[str] = []
     try:
         for token_id in token_ids:
-            token = FORMULA_VOCAB.id_to_token(int(token_id))
+            token = vocab.id_to_token(int(token_id))
             if token.kind in {"feature", "constant"}:
                 stack.append(token.name)
             elif token.kind == "operator" and token.arity == 1:
@@ -59,10 +61,10 @@ def decode_rpn(token_ids: list[int]) -> str:
                 left = stack.pop()
                 stack.append(f"({left} {token.name} {right})")
             else:
-                return " ".join(FORMULA_VOCAB.decode(token_ids))
-        return stack[0] if len(stack) == 1 else " ".join(FORMULA_VOCAB.decode(token_ids))
+                return " ".join(vocab.decode(token_ids))
+        return stack[0] if len(stack) == 1 else " ".join(vocab.decode(token_ids))
     except Exception:
-        return " ".join(FORMULA_VOCAB.decode(token_ids))
+        return " ".join(vocab.decode(token_ids))
 
 
 def score_token_formula(
@@ -72,12 +74,13 @@ def score_token_formula(
     panel: MarketPanel,
     vm: StackVM,
     config: FormulaScoreConfig,
+    vocab: FormulaVocab = FORMULA_VOCAB,
 ) -> tuple[dict[str, Any], np.ndarray | None]:
-    token_ids_text, token_names_text, decoded_formula = formula_text(token_ids)
+    token_ids_text, token_names_text, decoded_formula = formula_text(token_ids, vocab)
     base_row: dict[str, Any] = {
         "formula_id": formula_id,
         "source": source,
-        "vocab_version": VOCAB_VERSION,
+        "vocab_version": vocab.version,
         "token_ids": token_ids_text,
         "token_names": token_names_text,
         "decoded_formula": decoded_formula,
@@ -131,19 +134,30 @@ def score_token_formula(
     return base_row, result.signal
 
 
-def artifact_from_row(record: dict[str, Any], score_config: FormulaScoreConfig, created_at: str) -> dict[str, Any]:
+def artifact_from_row(
+    record: dict[str, Any],
+    score_config: FormulaScoreConfig,
+    created_at: str,
+    vocab: FormulaVocab = FORMULA_VOCAB,
+    research_spec: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if vocab.version != FORMULA_VOCAB.version and research_spec is None:
+        raise RuntimeError(f"Research spec is required to create artifacts for vocab {vocab.version}")
     token_ids = [int(item) for item in str(record["token_ids"]).split()]
-    return {
+    artifact = {
         "formula_id": record["formula_id"],
         "token_ids": token_ids,
-        "token_names": FORMULA_VOCAB.decode(token_ids),
-        "decoded_formula": decode_rpn(token_ids),
-        "vocab_version": VOCAB_VERSION,
+        "token_names": vocab.decode(token_ids),
+        "decoded_formula": decode_rpn(token_ids, vocab),
+        "vocab_version": vocab.version,
         "scorer_config": score_config.to_dict(),
         "reward": float(record["reward"]),
         "valid": bool(record["valid"]),
         "created_at": created_at,
     }
+    if research_spec is not None:
+        artifact["research_spec"] = research_spec
+    return artifact
 
 
 def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
@@ -161,17 +175,26 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def validate_artifact(artifact: dict[str, Any], score_config: FormulaScoreConfig) -> list[int]:
-    if artifact.get("vocab_version") != VOCAB_VERSION:
+def validate_artifact(
+    artifact: dict[str, Any],
+    score_config: FormulaScoreConfig,
+    vocab: FormulaVocab = FORMULA_VOCAB,
+    research_spec: dict[str, Any] | None = None,
+) -> list[int]:
+    if artifact.get("vocab_version") != vocab.version:
         raise RuntimeError(f"Artifact vocab mismatch for {artifact.get('formula_id')}")
     scorer_config = artifact.get("scorer_config", {})
     expected_scorer = score_config.to_dict()
     if scorer_config != expected_scorer:
         raise RuntimeError(f"Artifact scorer config mismatch for {artifact.get('formula_id')}: {scorer_config}")
     token_ids = [int(token_id) for token_id in artifact["token_ids"]]
-    expected_names = FORMULA_VOCAB.decode(token_ids)
+    expected_names = vocab.decode(token_ids)
     if artifact.get("token_names") != expected_names:
         raise RuntimeError(f"Artifact token name mismatch for {artifact.get('formula_id')}")
+    if vocab.version != FORMULA_VOCAB.version and research_spec is None:
+        raise RuntimeError(f"Artifact research spec is required for vocab {vocab.version}")
+    if research_spec is not None and artifact.get("research_spec") != research_spec:
+        raise RuntimeError(f"Artifact research spec mismatch for {artifact.get('formula_id')}")
     return token_ids
 
 
@@ -180,10 +203,12 @@ def rescore_loaded_artifacts(
     panel: MarketPanel,
     vm: StackVM,
     score_config: FormulaScoreConfig,
+    vocab: FormulaVocab = FORMULA_VOCAB,
+    research_spec: dict[str, Any] | None = None,
 ) -> dict[str, float]:
     rewards = {}
     for artifact in artifacts:
-        token_ids = validate_artifact(artifact, score_config)
+        token_ids = validate_artifact(artifact, score_config, vocab, research_spec)
         row, _ = score_token_formula(
             formula_id=str(artifact["formula_id"]),
             source="reloaded",
@@ -191,6 +216,7 @@ def rescore_loaded_artifacts(
             panel=panel,
             vm=vm,
             config=score_config,
+            vocab=vocab,
         )
         if not row["valid"]:
             raise RuntimeError(f"Reloaded artifact became invalid: {artifact['formula_id']} {row['invalid_reason']}")

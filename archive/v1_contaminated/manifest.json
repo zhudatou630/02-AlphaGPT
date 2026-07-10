@@ -1,0 +1,305 @@
+{
+  "schema_version": "legacy-research-manifest-v1",
+  "legacy_id": "phase1-phase3c-contaminated-v1",
+  "status": "frozen_invalid_for_research_conclusions",
+  "created_at": "2026-07-10T09:39:58.920341+00:00",
+  "git_commit": "2a9ac25e971494a17f6e45a553e2cb040c743b76",
+  "physical_files_moved": false,
+  "resume_allowed_in_v2": false,
+  "known_issues": [
+    "TDX qfq ignored ETF category 11/12 share split and merge events",
+    "TDX qfq rounded adjusted prices to two decimals",
+    "formula vocabulary exposed raw volume and amount",
+    "some TDX historical volume rows were inconsistent with amount and price",
+    "legacy checkpoints and artifacts did not record dataset identity"
+  ],
+  "replacement": {
+    "dataset_dir": "data/processed/v2/dataset",
+    "training_root": "data/processed/v2/training",
+    "vocab_version": "price-event-v2"
+  },
+  "files": [
+    {
+      "path": "data/processed/etf_panel_raw.npz",
+      "size_bytes": 767357,
+      "sha256": "18974bd5837fb7cee133182e6e2c362b4c64e521dabc8e6f885788d9271446c6",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/etf_panel_qfq_latest.npz",
+      "size_bytes": 595454,
+      "sha256": "c4a2f80e0e4ba3d5c754d8603679e3241d169ead205a8ad8b3f39a05050392e6",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase2a/formula_summary.csv",
+      "size_bytes": 2513,
+      "sha256": "889e1298c3662cd4faa8bd8867bba689a9bd68507bf2eaee9f10d8bdf1b7a021",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase2a/scorer_daily.csv",
+      "size_bytes": 2418408,
+      "sha256": "9c6607a90afb72ccc59cf172f2830fa20f81c595834a34810708e9eb1a1e687f",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase2a/trades.csv",
+      "size_bytes": 2987202,
+      "sha256": "3e0ac325dbf4dc2cc97c52c308f4c29b655000386a8f58eb9b9def4961f44e5a",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase2a/validator_daily.csv",
+      "size_bytes": 2518121,
+      "sha256": "b79cf33dccd8b8f186775804cf2663f65585c5f58b31f568b4635fb43dfb80db",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase2b/annual_summary.csv",
+      "size_bytes": 26210,
+      "sha256": "3a9f4ab804f6b79c3bb513737bba3f7248865469a1abcabaeb6825766f7750db",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase2b/formula_summary.csv",
+      "size_bytes": 5115,
+      "sha256": "d4e8ce3d25108b13569831b28939ebb187a55b8594073d737751a217bb81b2f6",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase2b/scorer_daily.csv",
+      "size_bytes": 2418408,
+      "sha256": "9c6607a90afb72ccc59cf172f2830fa20f81c595834a34810708e9eb1a1e687f",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase2b/tail_attribution.csv",
+      "size_bytes": 132902,
+      "sha256": "671d05eef5372e32998c90e55398eba712a0c133ec0b0dc526d638ce62937adb",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase2b/trade_distribution.csv",
+      "size_bytes": 3223,
+      "sha256": "b5daaf5ac73303a6de3df022f09f3832971504bf794ab2906f3a04d1641f6586",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase2b/trades.csv",
+      "size_bytes": 11680286,
+      "sha256": "f2abc88dca68a893f4be8c18b6239d290e05f09598fa2d5d4845fa1d51fc8a68",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase2b/validator_daily.csv",
+      "size_bytes": 5941316,
+      "sha256": "0e77e7be4e49d601f3d1d400daf4442dae6770feb5c0d57bcc93b804657b7753",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3a/best_formulas.csv",
+      "size_bytes": 6639,
+      "sha256": "e7350673421a27655327d6d9ee5a9723cc97e316d53b70a17fbfb6646b5b060e",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3a/best_formulas.jsonl",
+      "size_bytes": 6855,
+      "sha256": "7f82aeab572ec27462cab3448e91e1d68da7bd35da67e2b878911d82d28ea05c",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3a/generated_formulas.csv",
+      "size_bytes": 76984,
+      "sha256": "4421e11f82fdfaec8e89537e720bfd4f8d4b367ea541eb9bd2f7eda90ab4537b",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3a/phase3a_validator_summary.csv",
+      "size_bytes": 7707,
+      "sha256": "8ad0c5233f055d7b0aae820619e2d34d2a3bba21a2f888436b332814432d68e2",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3a/random_run_summary.csv",
+      "size_bytes": 374,
+      "sha256": "0dfbce5801f7e4f7d3398fbb5db35958ea4a584834d41ef2aadfe025e33787fc",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3b/latest_run.txt",
+      "size_bytes": 94,
+      "sha256": "4656723e6961dd60c8b2e188b83e33d26325aae75f539d11b3668f2cfe028bf5",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3b/runs/20260708-190425_seed42_steps500/best_formulas.csv",
+      "size_bytes": 9990,
+      "sha256": "bb3d4609c56711ae9438cdc63cb05d4f929765d5392df75c13207c6776cda8f2",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3b/runs/20260708-190425_seed42_steps500/best_formulas.jsonl",
+      "size_bytes": 13385,
+      "sha256": "cb93fb83f3ceb4d9eb90e923b018d7afba8826c7ea8ce2ac48519b2d90a56bfa",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3b/runs/20260708-190425_seed42_steps500/checkpoint.pt",
+      "size_bytes": 929738,
+      "sha256": "b293b0aea0dd82750b25a3864100b604fab33ff972266e9f552eef929114e84a",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3b/runs/20260708-190425_seed42_steps500/phase3b_validator_summary.csv",
+      "size_bytes": 16066,
+      "sha256": "2994580c5fc954ea4ae99db7de087afc478d260b12dd2f8bc8734ddf808754e4",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3b/runs/20260708-190425_seed42_steps500/run_summary.json",
+      "size_bytes": 1863,
+      "sha256": "0ce1b8e8b4cb9b35f24a92b60a44e260431bfd6506b73fb68645ab31251eb70f",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3b/runs/20260708-190425_seed42_steps500/sampled_formulas.csv",
+      "size_bytes": 15081443,
+      "sha256": "f27e7adb0056ab2ab6bfe66fb6cb808b773dc2e2e7cbe6d2d456db897bef547f",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3b/runs/20260708-190425_seed42_steps500/training_log.csv",
+      "size_bytes": 87888,
+      "sha256": "24c4eb8c3651983d1d1e7c77ef0a3661e7b0384e13c3e829d8053a4eb2359336",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/latest_run.txt",
+      "size_bytes": 81,
+      "sha256": "78bc04a1df0fa48d6ab2610d01dc4149cdd1d07bcc2f9f167b07734495562863",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/best_formulas.csv",
+      "size_bytes": 11072,
+      "sha256": "0e073464a633e85c3fec5eadc6b918c5c22dcf1a735de6b6a838765b12b482c6",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/best_formulas.jsonl",
+      "size_bytes": 13721,
+      "sha256": "7581ab95faed8dfbfa3bfe434e80126843783f545e13b0e376512d3c58ce8cdc",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/checkpoint.pt",
+      "size_bytes": 931723,
+      "sha256": "c9fb342c053a5a2644cfa82a8563258f4f5520d7ef93892408bfbbed45a96ebc",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/gpu_candidate_formulas.csv",
+      "size_bytes": 45349,
+      "sha256": "d3789e4434dd1e5ff901fa9b63ed63eb85642d237b05b402832efddbe7d6315e",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/phase3c_validator_summary.csv",
+      "size_bytes": 15780,
+      "sha256": "44b00168e2d79286bae4cb9cd8ec3adaddd7b4f1d2534106d903b4334edb419d",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/run_summary.json",
+      "size_bytes": 2135,
+      "sha256": "36a93e55a9c841ec3f22104da31faf795f2acf0d8813fa775070c182259fdbe7",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035155_4090d-smoke_seed42_steps50/training_log.csv",
+      "size_bytes": 15969,
+      "sha256": "8ec61618c7c26d521fe16e93820beba5e1f9ab90b2543117b2f61cca9389e8c0",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035820_4090d_seed42_steps100/best_formulas.csv",
+      "size_bytes": 11039,
+      "sha256": "327ff71540a3a57ea6f46803d035f659c5a74fc19359ccdca13af329b40c23c4",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035820_4090d_seed42_steps100/best_formulas.jsonl",
+      "size_bytes": 13718,
+      "sha256": "a25c2c5bb84b6330e269a6a281e7ee62350df613b0b76cff51f24d9d5c992b64",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035820_4090d_seed42_steps100/checkpoint.pt",
+      "size_bytes": 931723,
+      "sha256": "3a4af825bbc43012ae007a8700cce4f10031e3f8a11a28d5dc8f6536d41b988d",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035820_4090d_seed42_steps100/gpu_candidate_formulas.csv",
+      "size_bytes": 45526,
+      "sha256": "333b0ef4684fa1ea9644c7bc8a9b5fcca2100f8de752c66c66e8b49381f03ed3",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035820_4090d_seed42_steps100/phase3c_validator_summary.csv",
+      "size_bytes": 16428,
+      "sha256": "7387e1c5964424aea0434d35476c8221bd186efa034819c7a7933a055c4fea44",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035820_4090d_seed42_steps100/run_summary.json",
+      "size_bytes": 2092,
+      "sha256": "e2ca06e0935b5a2f87a0be29863726a9996342f1245bf249815b76ad8b6c05cf",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "data/processed/phase3c/runs/20260709-035820_4090d_seed42_steps100/training_log.csv",
+      "size_bytes": 32173,
+      "sha256": "0045a391c226f2bed3f3eec2a498be14d6208e6a11beffabc8ba6ac8a48e7f8b",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "scripts/phase1_build_data.py",
+      "size_bytes": 288,
+      "sha256": "85f9d73cd9468b2f732f79772dce93de8b663c6d5502f20ab68eecbc8db51863",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "scripts/phase2_run_fixed_formulas.py",
+      "size_bytes": 3194,
+      "sha256": "1198c25125141a7214020890ccd8ce5fd907e12703c7adb428ddc0997c5bfa5a",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "scripts/phase2b_run_fixed_formulas.py",
+      "size_bytes": 8704,
+      "sha256": "0ae47beecd517fed5f4cf17364bd320aff049f94a38d1fb41950acb5837318a1",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "scripts/phase3a_random_formulas.py",
+      "size_bytes": 15087,
+      "sha256": "8bdf85700afa36951685a03cf61e43ebb2572867762b73b045c4e4b59ebb56e5",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "scripts/phase3b_train_transformer.py",
+      "size_bytes": 14826,
+      "sha256": "c9998b79abcb4de9abcef41d4d67fc41dbde710d637a882a31ee8a2fcd8da433",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    },
+    {
+      "path": "scripts/phase3c_train_gpu.py",
+      "size_bytes": 34554,
+      "sha256": "97dec7b656443c0bfda0b5926ec9a52e4f5db94ff39a3de426a79e522eab9d2b",
+      "snapshot_source": "git:2a9ac25e971494a17f6e45a553e2cb040c743b76"
+    }
+  ]
+}

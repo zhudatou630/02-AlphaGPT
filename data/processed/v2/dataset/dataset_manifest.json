@@ -1,0 +1,48 @@
+{
+  "schema_version": "etf-price-dataset-v2",
+  "panel_file": "panel_price_event_v2.npz",
+  "panel_sha256": "f7b456a6389e6deba5dcaf66a347091095f13fa8c65894d513f0bb1c05eebe5a",
+  "source_file": "data/processed/phase1b_event_adjusted/etf_daily_event_adjusted.parquet",
+  "source_sha256": "39fd9da1f0b09bbc5c0c3b2e066d839dabdad5141bfe5ae8b59a0ea6b199d2b4",
+  "phase1b_summary_file": "data/processed/phase1b_event_adjusted/build_summary.json",
+  "phase1b_summary_sha256": "5247933c161fcbd85a193b38bc245478143ba5eba5f4086b7b2f94b5f9087cf9",
+  "features": [
+    "open",
+    "high",
+    "low",
+    "close"
+  ],
+  "price_adjustment": "multiplicative_event_qfq",
+  "flow_features_exposed": false,
+  "tradable_mask": "positive reconciled volume and amount; nontradable values are NaN",
+  "symbols": [
+    "510050",
+    "510300",
+    "510500",
+    "512100",
+    "159915",
+    "588000",
+    "510880",
+    "512800",
+    "512880",
+    "512760",
+    "512660",
+    "512010",
+    "159928",
+    "512400",
+    "515220",
+    "515790",
+    "515030"
+  ],
+  "date_start": "2010-01-04",
+  "date_end": "2026-07-07",
+  "date_count": 4007,
+  "tradable_observations": 43372,
+  "panel_shape": [
+    17,
+    4,
+    4007
+  ],
+  "dataset_id": "etf-price-event-v2-fd9ec97a6f3e",
+  "dataset_fingerprint": "fd9ec97a6f3eb20b5e19dda0f33ba0f82353cb028108b6f913ad3d3ca956c5fe"
+}
