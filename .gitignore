@@ -36,3 +36,11 @@ AGENTS.md
 # External reference checkout contains its own .git and a hardcoded token file.
 # Keep it local; use the upstream/fork URL as the source of truth instead.
 references/AlphaGPT/
+
+# Local data-quality probes and generated shadow artifacts. Tushare-derived
+# flow data is local-only; the committed V2 panel contains price features only.
+data/processed/data_quality/
+data/processed/phase1b_event_adjusted/
+data/processed/phase3c/analysis/
+data/processed/phase3c/**/phase3c_top20_validator_overview.csv
+data/processed/v2/training/
