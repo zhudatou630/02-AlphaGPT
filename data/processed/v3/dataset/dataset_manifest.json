@@ -1,0 +1,29 @@
+{
+  "research_version": "v3",
+  "symbols": 35,
+  "features": [
+    "open_rel",
+    "high_rel",
+    "low_rel",
+    "close_rel"
+  ],
+  "flow_features_exposed": false,
+  "dates": 5196,
+  "first_date": "2005-02-23",
+  "last_date": "2026-07-10",
+  "panel_shape": [
+    35,
+    4,
+    5196
+  ],
+  "tradable_observations": 72904,
+  "applied_events": 85,
+  "share_events": 15,
+  "nontradable_rows": 7,
+  "cross_source_overlap": 72939,
+  "cross_source_diff_gt_1pct": 4,
+  "unexplained_cross_source_diff_gt_1pct": 0,
+  "quality_gate_failures": {},
+  "panel_sha256": "cd453e47b9f061a4cc6fe15050b47a150f2fce45827600ae12f7817c3a490bc9",
+  "dataset_id": "etf-relative-price-v3-989c5d80a4e0"
+}

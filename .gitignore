@@ -44,3 +44,14 @@ data/processed/phase1b_event_adjusted/
 data/processed/phase3c/analysis/
 data/processed/phase3c/**/phase3c_top20_validator_overview.csv
 data/processed/v2/training/
+
+# V3 source downloads and governance tables are reproducible local artifacts.
+# Governance tables contain local-only Tushare quality data; the eventual
+# model-facing price-only dataset may be committed separately.
+data/staging/v3/
+data/raw/v3/
+data/processed/v3/data_quality/
+data/processed/v3/governance/
+
+# Per-product market inventory CSVs include Tushare liquidity/share fields.
+data/processed/etf_market_inventory/*.csv

@@ -70,6 +70,7 @@ var universe = []ETF{
 func main() {
 	outDir := flag.String("out", filepath.Join("data", "staging"), "output staging directory")
 	start := flag.String("start", "2010-01-01", "inclusive start date")
+	universePath := flag.String("universe", "", "optional JSON universe file")
 	flag.Parse()
 
 	startDate, err := time.Parse(time.DateOnly, *start)
@@ -79,6 +80,13 @@ func main() {
 
 	if err := os.MkdirAll(*outDir, 0755); err != nil {
 		fatalf("create output directory: %v", err)
+	}
+	exportUniverse := universe
+	if *universePath != "" {
+		exportUniverse, err = loadUniverse(*universePath)
+		if err != nil {
+			fatalf("load universe: %v", err)
+		}
 	}
 
 	bfqFile := mustCreate(filepath.Join(*outDir, "tdx_daily_bfq.jsonl"))
@@ -98,12 +106,37 @@ func main() {
 	}
 	defer client.Close()
 
-	for _, etf := range universe {
+	for _, etf := range exportUniverse {
 		if err := exportETF(client, etf, startDate, bfqEnc, qfqEnc, gbbqEnc); err != nil {
 			fatalf("export %s %s: %v", etf.Symbol, etf.Name, err)
 		}
 		fmt.Fprintf(os.Stderr, "exported %s %s\n", etf.Symbol, etf.Name)
 	}
+}
+
+func loadUniverse(path string) ([]ETF, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var items []ETF
+	if err := json.Unmarshal(data, &items); err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, fmt.Errorf("empty universe")
+	}
+	seen := make(map[string]bool, len(items))
+	for _, item := range items {
+		if item.Symbol == "" || item.Name == "" || item.Category == "" || item.Bucket == "" {
+			return nil, fmt.Errorf("incomplete universe item: %+v", item)
+		}
+		if seen[item.Symbol] {
+			return nil, fmt.Errorf("duplicate symbol: %s", item.Symbol)
+		}
+		seen[item.Symbol] = true
+	}
+	return items, nil
 }
 
 func exportETF(client *tdx.Client, etf ETF, startDate time.Time, bfqEnc, qfqEnc, gbbqEnc *json.Encoder) error {

@@ -1,0 +1,13 @@
+{
+  "as_of": "20260710",
+  "liquidity_start": "20260612",
+  "liquidity_days": 20,
+  "all_stock_etfs": 1643,
+  "domestic_candidates": 1335,
+  "current_domestic_candidates": 1226,
+  "ended_domestic_candidates": 98,
+  "pending_domestic_candidates": 11,
+  "excluded_non_domestic": 308,
+  "review": 0,
+  "benchmark_groups": 419
+}
