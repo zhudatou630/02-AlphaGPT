@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule AlphaGPT V3A project supervisor
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Persistent=true
+Unit=alphagpt-supervisor-3227c7e8e4.service
+
+[Install]
+WantedBy=timers.target

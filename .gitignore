@@ -38,10 +38,12 @@ Thumbs.db
 .pi/supervisor/journal/
 .pi/supervisor/locks/
 .pi/supervisor/observations/
+.pi/supervisor/notifications/
 .pi/supervisor/receipts/
 .pi/supervisor/staging/
 .pi/supervisor/state/
 .pi/supervisor/submissions/
+.pi/supervisor/monitor.lock
 AGENTS.md
 
 # External reference checkout contains its own .git and a hardcoded token file.
