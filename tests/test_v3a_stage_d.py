@@ -527,6 +527,38 @@ class V3AStageDTests(unittest.TestCase):
                     train_config=train_config,
                     scorer_config=scorer_config,
                 )
+        for rng_key, empty_value in (
+            ("python_random_state", {}),
+            ("numpy_random_state", {}),
+            ("torch_random_state", torch.empty(0, dtype=torch.uint8)),
+        ):
+            damaged = copy.deepcopy(valid_checkpoint)
+            damaged["rng_state"][rng_key] = empty_value
+            with self.assertRaisesRegex(RuntimeError, "RNG state"):
+                validate_checkpoint(
+                    damaged,
+                    research_spec=spec,
+                    run_id=run_config["run_id"],
+                    model_config=model_config,
+                    train_config=train_config,
+                    scorer_config=scorer_config,
+                )
+        stage_d_train_config = {
+            "schema_version": "etf-v3a-stage-d-transformer-v1"
+        }
+        missing_optimizer_state = copy.deepcopy(valid_checkpoint)
+        missing_optimizer_state["attempt_count"] = 1
+        missing_optimizer_state["candidate_state"]["attempt_count"] = 1
+        missing_optimizer_state["train_config"] = stage_d_train_config
+        with self.assertRaisesRegex(RuntimeError, "optimizer state is incomplete"):
+            validate_checkpoint(
+                missing_optimizer_state,
+                research_spec=spec,
+                run_id=run_config["run_id"],
+                model_config=model_config,
+                train_config=stage_d_train_config,
+                scorer_config=scorer_config,
+            )
         summary = {
             "run_id": run_config["run_id"],
             "protocol_id": run_config["protocol_id"],
@@ -558,10 +590,27 @@ class V3AStageDTests(unittest.TestCase):
                 model_config=model_config,
                 train_config=train_config,
                 scorer_config=scorer_config,
+                latest_checkpoint=valid_checkpoint,
             )
             marker = json.loads(
                 (run_dir / "training_complete.json").read_text(encoding="utf-8")
             )
+            tampered = copy.deepcopy(valid_checkpoint)
+            first_key = next(iter(tampered["model_state_dict"]))
+            tampered["model_state_dict"][first_key].view(-1)[0] += 1.0
+            atomic_save(tampered, final)
+            with self.assertRaisesRegex(RuntimeError, "latest/final"):
+                train_gpu._recover_completed(
+                    run_dir=run_dir,
+                    checkpoint_path=final,
+                    candidate_state=candidate_state,
+                    run_config=run_config,
+                    research_spec=spec,
+                    model_config=model_config,
+                    train_config=train_config,
+                    scorer_config=scorer_config,
+                    latest_checkpoint=valid_checkpoint,
+                )
         self.assertEqual(recovered, summary)
         self.assertEqual(marker["checkpoint_sha256"], final_sha256)
         self.assertNotEqual(

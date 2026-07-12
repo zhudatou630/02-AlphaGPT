@@ -31,6 +31,7 @@ from alpha_etf.research_v3a.candidates import (
     expression_hash,
 )
 from alpha_etf.research_v3a.checkpointing import (
+    assert_checkpoint_state_equal,
     atomic_save,
     build_checkpoint,
     load_checkpoint,
@@ -252,6 +253,7 @@ def _recover_completed(
     model_config: dict[str, Any],
     train_config: dict[str, Any],
     scorer_config: dict[str, Any],
+    latest_checkpoint: dict[str, Any],
 ) -> dict[str, Any] | None:
     summary_path = run_dir / "training_summary.json"
     marker_path = run_dir / "training_complete.json"
@@ -270,6 +272,11 @@ def _recover_completed(
     )
     if int(final_checkpoint["attempt_count"]) != int(run_config["attempts"]):
         raise RuntimeError("V3A Stage D final checkpoint attempt count mismatch")
+    assert_checkpoint_state_equal(
+        latest_checkpoint,
+        final_checkpoint,
+        label="Stage D latest/final checkpoint",
+    )
     final_candidate_state = final_checkpoint["candidate_state"]
     validate_training_candidate_state(
         final_candidate_state,
@@ -428,12 +435,14 @@ def main() -> None:
         ledger_digest = _ledger_digest_at(
             ledger_path, int(candidate_state["attempt_ledger_offset"])
         )
+        latest_checkpoint = checkpoint
     else:
         created_at = datetime.now(timezone.utc).isoformat()
         candidate_state = empty_training_candidate_state(created_at=created_at)
         completed_attempts = 0
         step = 0
         ledger = ledger_path.open("xb")
+        latest_checkpoint = None
         ledger_digest = hashlib.sha256()
         ledger.flush()
         os.fsync(ledger.fileno())
@@ -462,6 +471,8 @@ def main() -> None:
         raise RuntimeError("V3A Stage D checkpoint exceeds protocol attempts")
     needs_finalization = completed_attempts == attempts and args.stop_after is None
     if needs_finalization:
+        if latest_checkpoint is None:
+            raise RuntimeError("V3A Stage D completed recovery lacks a latest checkpoint")
         recovered = _recover_completed(
             run_dir=run_dir,
             checkpoint_path=final_checkpoint_path,
@@ -471,6 +482,7 @@ def main() -> None:
             model_config=model_config,
             train_config=train_config,
             scorer_config=scorer_config.to_dict(),
+            latest_checkpoint=latest_checkpoint,
         )
         if recovered is not None:
             ledger.close()
