@@ -238,6 +238,15 @@ def _assert_final_state_derived(
     _assert_nested_equal(expected, final_checkpoint, "checkpoint")
 
 
+def _funnel_records_by_hash(
+    funnel_artifact: dict[str, Any],
+) -> dict[str, CandidateRecord]:
+    return {
+        str(payload["formula_hash"]): candidate_record_from_dict(payload)
+        for payload in funnel_artifact["records"]
+    }
+
+
 def main() -> None:
     args = parse_args()
     protocol = load_stage_d_protocol(args.protocol_file)
@@ -342,10 +351,7 @@ def main() -> None:
         actual_hashes = [str(artifact["formula_hash"]) for artifact in existing_formulas]
         if actual_hashes != expected_hashes:
             raise RuntimeError("V3A Stage D selected formulas differ from the funnel")
-        funnel_records = {
-            str(payload["formula_hash"]): candidate_record_from_dict(payload)
-            for payload in existing_funnel["signal_unique_records"]
-        }
+        funnel_records = _funnel_records_by_hash(existing_funnel)
         if any(
             record != funnel_records.get(record.formula_hash)
             for record in validated_formulas

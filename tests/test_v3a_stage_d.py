@@ -736,6 +736,20 @@ class V3AStageDTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "model_state_dict"):
             select_candidates._assert_final_state_derived(source, final, funnel)
 
+    def test_funnel_recovery_reads_the_frozen_records_field(self) -> None:
+        record = build_candidate_record(
+            formula_id="fixture",
+            source="fixture",
+            token_ids=FORMULA_VOCAB.encode(["GAP"]),
+            reward=0.1,
+            train_summary={"scorer_days": 300},
+            attempt_index=0,
+        )
+        restored = select_candidates._funnel_records_by_hash(
+            {"records": [record.to_dict()]}
+        )
+        self.assertEqual(restored, {record.formula_hash: record})
+
 
 if __name__ == "__main__":
     unittest.main()
