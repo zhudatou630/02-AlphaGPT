@@ -42,7 +42,10 @@ jq -n \
   '{run_id:$run_id,repo:$repo,runtime_dir:$runtime_dir,screen_name:$screen_name,state_file:$state_file,bundle_path:$bundle_path,input_archive_path:$input_archive_path,run_spec_path:$run_spec_path,run_spec_sha256:$run_spec_sha256,runner_sha256:$runner_sha256,expected:$expected}' \
   >"$temporary"
 scp_to_remote "$temporary" "$REMOTE_RUNTIME/runtime.json"
-remote_exec chmod 700 "$REMOTE_RUNTIME"/*.sh "$REMOTE_RUNTIME"/*.py
+remote_exec chmod 700 \
+  "$REMOTE_RUNTIME/deploy.sh" "$REMOTE_RUNTIME/probe.py" \
+  "$REMOTE_RUNTIME/runner.sh" "$REMOTE_RUNTIME/start.sh" \
+  "$REMOTE_RUNTIME/stop.sh" "$REMOTE_RUNTIME/write_state.py"
 remote_exec "$REMOTE_RUNTIME/deploy.sh" "$REMOTE_RUNTIME/runtime.json"
 remote_exec "$REMOTE_RUNTIME/start.sh" "$REMOTE_RUNTIME/runtime.json"
 printf '%s\n' "pilot launched: $RUN_ID"

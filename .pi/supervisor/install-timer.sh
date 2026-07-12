@@ -11,5 +11,6 @@ mkdir -p "$UNIT_DIR"
 install -m 0644 "$ROOT/.pi/supervisor/systemd/$SERVICE" "$UNIT_DIR/$SERVICE"
 install -m 0644 "$ROOT/.pi/supervisor/systemd/$TIMER" "$UNIT_DIR/$TIMER"
 systemctl --user daemon-reload
-systemctl --user enable --now "$TIMER"
+systemctl --user enable "$TIMER"
+systemctl --user restart "$TIMER"
 printf '%s\n' "monitor timer enabled"
