@@ -7,7 +7,8 @@
 - Stage D 的小规模训练 pilot 和正式训练都只能在 GPU 服务器执行；不得在本机 CPU 上运行
   具有研究含义的训练。
 - 历史上只批准过 Stage D pilot；当前 Transformer pilot 和 reward calibration pilot 均已完成。正式
-  top-N protocol 已写入 `configs/v3a_stage_d_formal_topn.json`，但尚未创建 binding 或启动远端 run。
+  top-N protocol 已写入 `configs/v3a_stage_d_formal_topn.json`，formal train-view 和 binding 已生成，
+  但尚未启动远端 run。
 - 历史 pilot protocol、binding 和 runner 保留用于复核，不作为新的 Stage D 或 formal run 入口。
 - 当前公式库主路径是完整 ledger、raw top 30/50 和 curated top 30/50；完整候选漏斗只作为未来
   可选分析，不再是公式库产出的硬门槛。
@@ -80,8 +81,9 @@ attempt、累计出现次数、最高 reward 记录和对应 attempt；三个 to
 `formal_budget_approved` 不是 `true`，不得启动 formal run。
 
 当前已写入的 formal protocol 为 `configs/v3a_stage_d_formal_topn.json`，protocol ID 为
-`b815644fedcb84a4b9d17ececf957801a1060b4d95c2dcbef5b615e66ea5873b`。它已通过代码身份门禁，
-但尚未生成 runtime binding，也没有启动远端任务。
+`b815644fedcb84a4b9d17ececf957801a1060b4d95c2dcbef5b615e66ea5873b`。formal binding 为
+`cd9923cdfc301c0f086f96385c44bbae1a5bfc3b3314c8a25036faf82e77104e`，绑定代码 commit
+`1793ee10808f1136589c65e408611a21469392ac`；它已通过身份门禁，但没有启动远端任务。
 
 formal protocol 至少冻结：
 
@@ -105,6 +107,6 @@ formal protocol 至少冻结：
 
 1. 历史 pilot 和 reward calibration 的 raw/curated 公式库先完成人工阅读；
 2. `training_invalid_reward=-0.01` 和 curated `5e-6` 已写入 formal protocol；
-3. 基于最终代码 commit 生成 formal binding，重新核对代码、数据、ResearchSpec 和 train-view 身份；
-4. 用户明确批准启动后，才在 GPU 服务器部署 formal commit 并运行 CUDA 身份/smoke；
+3. formal binding 已生成，代码、数据、ResearchSpec 和 train-view 身份已完成核对；
+4. 用户明确批准启动后，才在 GPU 服务器部署该 commit 并运行 CUDA 身份/smoke；
 5. formal Stage D 完成后再次停止，不自动打开 2022。

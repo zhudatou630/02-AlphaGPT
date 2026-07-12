@@ -37,11 +37,11 @@ V3A 是一个个人研究项目，当前目标是先把“自动发现公式并�
 | Stage D Transformer pilot 训练 | 已完成 | legacy 与 reward-calibration 两个 `50000/50000` run 均完成，checkpoint/resume 已验证 |
 | top-N 公式库输出 | 已完成 | 同时保留 raw top 30/50 和 curated top 30/50 |
 | 全量信号相似度/聚类漏斗 | 暂停 | 不再作为当前主路径 |
-| Formal Transformer + matched-random | protocol 已写入，尚未启动 | 3+3 seeds、每 seed 1,000,000 attempts；binding 和远端 run 尚未创建 |
+| Formal Transformer + matched-random | protocol/binding 已写入，尚未启动 | 3+3 seeds、每 seed 1,000,000 attempts；远端 run 尚未创建 |
 | 2022/2023+ 样本外验证 | 未开始 | 等后续交易问题明确后再考虑 |
 | 纸面交易、执行、实盘 | 未开始 | 不属于当前个人探索阶段 |
 
-这次 Transformer 训练没有形成策略结论，但已经提供了真实训练和 resume 的工程证据。两个 pilot 都已从完整账本导出 raw/curated top 30/50。formal protocol 已写入，但 binding、远端部署和启动仍需单独核对与批准；不再让复杂候选漏斗阻塞公式库产出。
+这次 Transformer 训练没有形成策略结论，但已经提供了真实训练和 resume 的工程证据。两个 pilot 都已从完整账本导出 raw/curated top 30/50。formal protocol 和 binding 已写入并完成身份核对，但远端部署和启动仍需单独批准；不再让复杂候选漏斗阻塞公式库产出。
 
 ## 2. V3A 要回答的研究问题
 
@@ -339,7 +339,7 @@ pilot 是真实训练，但不是正式比较实验。它只有一个 seed，没
 
 这一步的产物是研究材料，不是最终策略，也不需要宣称 Transformer 胜过 random。
 
-formal protocol 现在已经写入，但在创建 binding 和启动前仍需再次核对最终代码身份。它固定：
+formal protocol 和 binding 现在已经写入，启动前仍需再次确认远端部署身份。它固定：
 
 ```text
 Transformer 和 random 是否都要跑
@@ -415,7 +415,7 @@ research_spec_id: 1ea1382f50a35b94efa494dc56ceeddb7e0a4f56464d9add297a1249f1a620
 
 这样远端即使有旧代码、旧数据或旧产物，也不能悄悄混用。
 
-后续 formal 不能复用这个 binding。formal 必须使用已写入的独立 protocol，并在最终代码 commit 后重新冻结代码、ResearchSpec、train-view、数据身份和新的 binding。curated 导出规则已经写入 formal protocol，也必须随 formal artifact 留痕，但不能反向修改历史 binding。
+后续 formal 不能复用这个历史 pilot binding。当前 formal 已使用独立 protocol，并冻结了代码、ResearchSpec、train-view、数据身份和新的 binding。curated 导出规则已经写入 formal protocol，也必须随 formal artifact 留痕，但不能反向修改历史 binding。
 
 ### 6.3 当前关键产物
 
@@ -427,6 +427,8 @@ data/processed/v3a/stage_d/pilot_binding.json
 data/processed/v3a/baseline/runs/
 data/processed/v3a/smoke/
 data/processed/v3a/training/runs/*/formula_library/curated_export/
+data/processed/v3a/stage_d/formal_topn_train_view/
+data/processed/v3a/stage_d/formal_topn_binding.json
 ```
 
 Transformer pilot 的远端训练 checkpoint 曾经生成并保留在远端 run 目录中；本次远端任务停止后，没有把它误标为 formal 结果，也没有把未完成候选漏斗提升为正式 artifact。完整 ledger、raw top-N 和 curated top-N 是当前允许使用的训练期研究材料。
