@@ -36,6 +36,7 @@ from alpha_etf.research_v3a.stage_d import (
     load_stage_d_train_view,
     load_train_view_source_manifest,
     reinforce_objective,
+    require_stage_d_cuda,
     verify_stage_c_prerequisite,
 )
 from alpha_etf.research_v3a.torch_scoring import (
@@ -157,9 +158,7 @@ def main() -> None:
     protocol = load_stage_d_protocol(args.protocol_file)
     verify_stage_c_prerequisite(protocol, args.stage_c_report)
     require_clean_v3a_code(extra_paths=(args.protocol_file,))
-    if not torch.cuda.is_available():
-        raise RuntimeError("V3A Stage D CUDA resume probe requires a GPU")
-    device = torch.device("cuda")
+    device = require_stage_d_cuda(protocol)
     source_manifest = load_train_view_source_manifest(args.train_view_dir)
     scorer_config_object = ScorerConfig()
     candidate_config = CandidateConfig()
@@ -198,7 +197,7 @@ def main() -> None:
     )
 
     seed = 271828
-    batch_size = int(protocol["runs"]["transformer"]["batch_size"])
+    batch_size = int(protocol["batch_size"])
     policy_vocab = PolicyVocab()
     model_config_object = _model_config(protocol, policy_vocab)
     model_config = model_config_object.to_dict()

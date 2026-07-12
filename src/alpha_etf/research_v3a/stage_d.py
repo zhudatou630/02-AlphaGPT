@@ -55,6 +55,23 @@ class StageDTrainView:
     manifest: dict[str, Any]
 
 
+def require_stage_d_cuda(protocol: dict[str, Any]) -> torch.device:
+    if not torch.cuda.is_available():
+        raise RuntimeError("V3A Stage D requires CUDA; no CPU fallback is allowed")
+    device = torch.device("cuda")
+    actual_name = torch.cuda.get_device_name(device)
+    expected_class = str(protocol["execution"]["gpu_class"])
+    normalized_actual = "".join(character for character in actual_name.lower() if character.isalnum())
+    normalized_expected = "".join(
+        character for character in expected_class.lower() if character.isalnum()
+    )
+    if normalized_expected not in normalized_actual:
+        raise RuntimeError(
+            f"V3A Stage D requires {expected_class}; found {actual_name}"
+        )
+    return device
+
+
 def train_view_fingerprint(payload: dict[str, Any]) -> str:
     identity = dict(payload)
     identity.pop("train_view_id", None)

@@ -25,9 +25,15 @@ mapfile -t BINDING_VALUES < <(
 import json, sys
 from alpha_etf.research_v3a.stage_d import stage_d_binding_id
 binding=json.load(open(sys.argv[1], encoding="utf-8"))
-assert binding["binding_id"] == sys.argv[2]
-assert binding["binding_id"] == stage_d_binding_id(binding)
-assert binding["protocol_id"] == "078af5f6466bd9661443d26f5722a107f67e69298bb0e593c730e7f6f042cc8b"
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+require(binding["binding_id"] == sys.argv[2], "unapproved Stage D binding")
+require(binding["binding_id"] == stage_d_binding_id(binding), "invalid Stage D binding id")
+require(
+    binding["protocol_id"] == "078af5f6466bd9661443d26f5722a107f67e69298bb0e593c730e7f6f042cc8b",
+    "wrong Stage D pilot protocol",
+)
 for key in (
     "dataset_id", "panel_sha256", "research_spec_id", "code_fingerprint",
     "train_view_id", "code_commit", "binding_id",
@@ -75,18 +81,24 @@ if [[ -f "$SMOKE_DIR/summary.json" ]]; then
 import hashlib, json, sys
 summary=json.load(open(sys.argv[1], encoding="utf-8"))
 checkpoint=__import__("pathlib").Path(sys.argv[2])
-assert checkpoint.is_file()
-assert summary["status"] == "passed"
-assert summary["run_id"] == sys.argv[3]
-assert summary["device"] == "cuda"
-assert summary["finite_gradients"] is True
-assert summary["resume_next_batch_equal"] is True
-assert summary["validation_or_final_metrics_read"] is False
-assert summary["dataset_id"] == sys.argv[4]
-assert summary["panel_sha256"] == sys.argv[5]
-assert summary["research_spec_id"] == sys.argv[6]
-assert summary["code_fingerprint"] == sys.argv[7]
-assert summary["checkpoint_sha256"] == hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+require(checkpoint.is_file(), "missing smoke checkpoint")
+require(summary["status"] == "passed", "smoke did not pass")
+require(summary["run_id"] == sys.argv[3], "smoke run id mismatch")
+require(summary["device"] == "cuda", "smoke did not use CUDA")
+require(summary["finite_gradients"] is True, "smoke gradients are not finite")
+require(summary["resume_next_batch_equal"] is True, "smoke resume mismatch")
+require(summary["validation_or_final_metrics_read"] is False, "smoke read sealed data")
+require(summary["dataset_id"] == sys.argv[4], "smoke dataset mismatch")
+require(summary["panel_sha256"] == sys.argv[5], "smoke panel mismatch")
+require(summary["research_spec_id"] == sys.argv[6], "smoke ResearchSpec mismatch")
+require(summary["code_fingerprint"] == sys.argv[7], "smoke code mismatch")
+require(
+    summary["checkpoint_sha256"] == hashlib.sha256(checkpoint.read_bytes()).hexdigest(),
+    "smoke checkpoint mismatch",
+)
 PY
 else
   PYTHONPATH=src "$PYTHON_BIN" scripts/v3a/gpu_smoke.py \
@@ -146,17 +158,20 @@ PYTHONPATH=src "$PYTHON_BIN" scripts/v3a/select_candidates.py \
 import json, sys
 training=json.load(open(sys.argv[1], encoding="utf-8"))
 funnel=json.load(open(sys.argv[2], encoding="utf-8"))
-assert training["status"] == "pilot_trained_awaiting_funnel"
-assert training["binding_id"] == sys.argv[3]
-assert training["attempt_count"] == 50_000
-assert training["resume_count"] >= 1
-assert training["grammar_invalid_rate"] == 0.0
-assert training["validation_or_final_metrics_read"] is False
-assert funnel["status"] == "pilot_diagnostic_passed"
-assert funnel["binding_id"] == sys.argv[3]
-assert funnel["selected_count"] == 50
-assert funnel["research_conclusion_allowed"] is False
-assert funnel["validation_or_final_metrics_read"] is False
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+require(training["status"] == "pilot_trained_awaiting_funnel", "training status mismatch")
+require(training["binding_id"] == sys.argv[3], "training binding mismatch")
+require(training["attempt_count"] == 50_000, "training attempts mismatch")
+require(training["resume_count"] >= 1, "forced resume did not occur")
+require(training["grammar_invalid_rate"] == 0.0, "grammar invalid rate is nonzero")
+require(training["validation_or_final_metrics_read"] is False, "training read sealed data")
+require(funnel["status"] == "pilot_diagnostic_passed", "funnel status mismatch")
+require(funnel["binding_id"] == sys.argv[3], "funnel binding mismatch")
+require(funnel["selected_count"] == 50, "funnel selected count mismatch")
+require(funnel["research_conclusion_allowed"] is False, "pilot allowed a research conclusion")
+require(funnel["validation_or_final_metrics_read"] is False, "funnel read sealed data")
 print(json.dumps({
     "status": "pilot_passed",
     "run_id": training["run_id"],

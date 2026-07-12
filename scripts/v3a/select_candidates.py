@@ -46,6 +46,7 @@ from alpha_etf.research_v3a.stage_d import (
     load_stage_d_train_view,
     load_train_view_source_manifest,
     method_run_config,
+    require_stage_d_cuda,
     retained_candidates,
     validate_training_candidate_state,
     verify_stage_c_prerequisite,
@@ -85,12 +86,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stage-c-report", type=Path, default=DEFAULT_STAGE_C_REPORT)
     parser.add_argument("--binding-file", type=Path, default=DEFAULT_BINDING)
     return parser.parse_args()
-
-
-def _require_cuda() -> torch.device:
-    if not torch.cuda.is_available():
-        raise RuntimeError("V3A Stage D candidate replay is CUDA-only")
-    return torch.device("cuda")
 
 
 def _load_transformer_source(
@@ -251,7 +246,7 @@ def main() -> None:
     )
     verify_stage_c_prerequisite(protocol, args.stage_c_report)
     require_clean_v3a_code(extra_paths=(args.protocol_file,))
-    device = _require_cuda()
+    device = require_stage_d_cuda(protocol)
     manifest = load_train_view_source_manifest(args.train_view_dir)
     scorer_config = ScorerConfig()
     candidate_config = CandidateConfig()

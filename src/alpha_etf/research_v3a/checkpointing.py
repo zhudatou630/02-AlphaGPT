@@ -281,6 +281,44 @@ def validate_checkpoint(
         raise RuntimeError("V3A checkpoint train config mismatch")
     if int(checkpoint.get("step", -1)) < 0 or int(checkpoint.get("attempt_count", -1)) < 0:
         raise RuntimeError("V3A checkpoint counters are invalid")
+    model_state = checkpoint.get("model_state_dict")
+    if (
+        not isinstance(model_state, dict)
+        or not model_state
+        or not all(
+            isinstance(key, str) and isinstance(value, torch.Tensor)
+            for key, value in model_state.items()
+        )
+    ):
+        raise RuntimeError("V3A checkpoint model state is invalid")
+    optimizer_state = checkpoint.get("optimizer_state_dict")
+    if (
+        not isinstance(optimizer_state, dict)
+        or not isinstance(optimizer_state.get("state"), dict)
+        or not isinstance(optimizer_state.get("param_groups"), list)
+        or not optimizer_state["param_groups"]
+    ):
+        raise RuntimeError("V3A checkpoint optimizer state is invalid")
+    rng_state = checkpoint.get("rng_state")
+    required_rng = {
+        "python_random_state",
+        "numpy_random_state",
+        "torch_random_state",
+        "torch_cuda_random_state_all",
+    }
+    if not isinstance(rng_state, dict) or required_rng - set(rng_state):
+        raise RuntimeError("V3A checkpoint RNG state is invalid")
+    if (
+        not isinstance(rng_state["python_random_state"], dict)
+        or not isinstance(rng_state["numpy_random_state"], dict)
+        or not isinstance(rng_state["torch_random_state"], torch.Tensor)
+        or not isinstance(rng_state["torch_cuda_random_state_all"], list)
+        or not all(
+            isinstance(value, torch.Tensor)
+            for value in rng_state["torch_cuda_random_state_all"]
+        )
+    ):
+        raise RuntimeError("V3A checkpoint RNG state is invalid")
     validate_candidate_state(
         checkpoint.get("candidate_state", {}),
         attempt_count=int(checkpoint["attempt_count"]),

@@ -19,6 +19,7 @@ from alpha_etf.research_v3a.checkpointing import (
     empty_candidate_state,
     load_checkpoint,
     restore_training_state,
+    validate_checkpoint,
 )
 from alpha_etf.research_v3a.language import FORMULA_VOCAB
 from alpha_etf.research_v3a.sampling import PolicyVocab, SamplingConfig, sample_formulas
@@ -32,6 +33,7 @@ from alpha_etf.research_v3a.stage_d import (
     load_stage_d_train_view,
     method_run_config,
     reinforce_objective,
+    require_stage_d_cuda,
     retain_candidate,
     sequence_digest,
     stage_d_protocol_id,
@@ -265,9 +267,16 @@ class V3AStageDTests(unittest.TestCase):
             )
 
     def test_training_entry_has_no_cpu_fallback(self) -> None:
+        protocol = load_stage_d_protocol(PILOT_PROTOCOL)
         with mock.patch("torch.cuda.is_available", return_value=False):
-            with self.assertRaisesRegex(RuntimeError, "GPU-only"):
-                train_gpu._require_cuda()
+            with self.assertRaisesRegex(RuntimeError, "no CPU fallback"):
+                require_stage_d_cuda(protocol)
+        with (
+            mock.patch("torch.cuda.is_available", return_value=True),
+            mock.patch("torch.cuda.get_device_name", return_value="NVIDIA A100"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "rtx_4090d"):
+                require_stage_d_cuda(protocol)
         self.assertEqual(
             train_gpu._resolved_run_until(
                 attempts=50_000, batch_size=256, stop_after=10_240
@@ -490,6 +499,34 @@ class V3AStageDTests(unittest.TestCase):
         scorer_config = {"fixture": True}
         model = TransformerFormulaPolicy(model_config_object)
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        valid_checkpoint = build_checkpoint(
+            run_id=run_config["run_id"],
+            step=0,
+            attempt_count=0,
+            model=model,
+            optimizer=optimizer,
+            model_config=model_config,
+            train_config=train_config,
+            scorer_config=scorer_config,
+            candidate_state=candidate_state,
+            research_spec=spec,
+        )
+        for missing_key in (
+            "model_state_dict",
+            "optimizer_state_dict",
+            "rng_state",
+        ):
+            damaged = copy.deepcopy(valid_checkpoint)
+            damaged.pop(missing_key)
+            with self.assertRaisesRegex(RuntimeError, "state is invalid"):
+                validate_checkpoint(
+                    damaged,
+                    research_spec=spec,
+                    run_id=run_config["run_id"],
+                    model_config=model_config,
+                    train_config=train_config,
+                    scorer_config=scorer_config,
+                )
         summary = {
             "run_id": run_config["run_id"],
             "protocol_id": run_config["protocol_id"],
@@ -510,21 +547,7 @@ class V3AStageDTests(unittest.TestCase):
             latest = run_dir / "checkpoint_latest.pt"
             final = run_dir / "checkpoint_final.pt"
             latest.write_bytes(b"latest")
-            atomic_save(
-                build_checkpoint(
-                    run_id=run_config["run_id"],
-                    step=0,
-                    attempt_count=0,
-                    model=model,
-                    optimizer=optimizer,
-                    model_config=model_config,
-                    train_config=train_config,
-                    scorer_config=scorer_config,
-                    candidate_state=candidate_state,
-                    research_spec=spec,
-                ),
-                final,
-            )
+            atomic_save(valid_checkpoint, final)
             final_sha256 = hashlib.sha256(final.read_bytes()).hexdigest()
             recovered = train_gpu._recover_completed(
                 run_dir=run_dir,

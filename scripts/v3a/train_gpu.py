@@ -50,6 +50,7 @@ from alpha_etf.research_v3a.stage_d import (
     load_train_view_source_manifest,
     method_run_config,
     reinforce_objective,
+    require_stage_d_cuda,
     retain_candidate,
     retained_candidates,
     sequence_digest,
@@ -95,14 +96,6 @@ def parse_args() -> argparse.Namespace:
         help="Checkpoint after this cumulative attempt count; used for GPU resume validation.",
     )
     return parser.parse_args()
-
-
-def _require_cuda() -> torch.device:
-    if not torch.cuda.is_available():
-        raise RuntimeError(
-            "V3A Stage D research training is GPU-only; CUDA is not available"
-        )
-    return torch.device("cuda")
 
 
 def _resolved_run_until(
@@ -314,7 +307,7 @@ def main() -> None:
     )
     verify_stage_c_prerequisite(protocol, args.stage_c_report)
     require_clean_v3a_code(extra_paths=(args.protocol_file,))
-    device = _require_cuda()
+    device = require_stage_d_cuda(protocol)
     manifest = load_train_view_source_manifest(args.train_view_dir)
     scorer_config = ScorerConfig()
     candidate_config = CandidateConfig()
