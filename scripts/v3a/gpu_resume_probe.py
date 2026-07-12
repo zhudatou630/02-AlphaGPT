@@ -105,11 +105,16 @@ def _update(
     quality_valid, _, _, _ = _quality_metrics(
         vm_result.signal, targets, candidate_config
     )
+    training_invalid_reward = float(
+        protocol["reinforce"].get(
+            "training_invalid_reward", scorer_config.hard_invalid_reward
+        )
+    )
     rewards = effective_training_rewards(
         scored.reward,
         scorer_valid=scored.valid,
         quality_valid=quality_valid,
-        hard_invalid_reward=scorer_config.hard_invalid_reward,
+        hard_invalid_reward=training_invalid_reward,
     )
     objective = reinforce_objective(
         log_prob_sums=sample.log_prob_sums,

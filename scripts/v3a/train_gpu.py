@@ -541,6 +541,9 @@ def main() -> None:
     last_checkpoint_at = session_started
     checkpoint_config = protocol["checkpoint"]
     reinforce_config = protocol["reinforce"]
+    training_invalid_reward = float(
+        reinforce_config.get("training_invalid_reward", scorer_config.hard_invalid_reward)
+    )
 
     try:
         while completed_attempts < run_until:
@@ -560,11 +563,23 @@ def main() -> None:
             quality_valid, coverage, std, variation_valid = _quality_metrics(
                 vm_result.signal, torch_targets, candidate_config
             )
+            semantic_valid = scored.valid & quality_valid & torch.isfinite(scored.reward)
+            semantic_valid_count = int(semantic_valid.sum().detach().cpu().item())
+            semantic_reward_mean = (
+                float(scored.reward[semantic_valid].mean().detach().cpu().item())
+                if semantic_valid_count
+                else 0.0
+            )
+            semantic_reward_std = (
+                float(scored.reward[semantic_valid].std(unbiased=False).detach().cpu().item())
+                if semantic_valid_count
+                else 0.0
+            )
             training_rewards = effective_training_rewards(
                 scored.reward,
                 scorer_valid=scored.valid,
                 quality_valid=quality_valid,
-                hard_invalid_reward=scorer_config.hard_invalid_reward,
+                hard_invalid_reward=training_invalid_reward,
             )
             objective = reinforce_objective(
                 log_prob_sums=sample.log_prob_sums,
@@ -738,6 +753,10 @@ def main() -> None:
                     ),
                     "reward_mean": float(objective.reward_mean.detach().cpu().item()),
                     "reward_std": float(objective.reward_std.detach().cpu().item()),
+                    "semantic_valid_count": semantic_valid_count,
+                    "semantic_reward_mean": semantic_reward_mean,
+                    "semantic_reward_std": semantic_reward_std,
+                    "training_invalid_reward": training_invalid_reward,
                     "valid_rate": float(
                         (scored.valid & quality_valid).float().mean().detach().cpu().item()
                     ),
@@ -822,6 +841,7 @@ def main() -> None:
                 print(
                     f"attempts={completed_attempts}/{attempts} "
                     f"valid={candidate_state['training_log'][-1]['valid_rate']:.1%} "
+                    f"semantic={candidate_state['training_log'][-1]['semantic_reward_mean']:.6f} "
                     f"entropy={candidate_state['training_log'][-1]['entropy']:.3f}",
                     flush=True,
                 )
@@ -877,9 +897,14 @@ def main() -> None:
     _write_jsonl_atomic(run_dir / "training_log.jsonl", training_log)
     elapsed = float(candidate_state["elapsed_seconds"])
     retained = retained_candidates(candidate_state)
+    training_status = (
+        "pilot_calibration_trained"
+        if not protocol["candidate_output"]["apply_full_funnel"]
+        else f"{protocol['mode']}_trained_awaiting_funnel"
+    )
     summary: dict[str, Any] = {
         "schema_version": TRAINING_SCHEMA_VERSION,
-        "status": f"{protocol['mode']}_trained_awaiting_funnel",
+        "status": training_status,
         "created_at": candidate_state["artifact_created_at"],
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "run_id": run_id,
@@ -902,6 +927,7 @@ def main() -> None:
         "attempt_count": attempts,
         "step_count": step,
         "batch_size": batch_size,
+        "training_invalid_reward": training_invalid_reward,
         "attempt_ledger_reconciled": True,
         "attempt_ledger_line_count": candidate_state[
             "attempt_ledger_line_count"

@@ -32,6 +32,9 @@ TRAIN_VIEW_SCHEMA_VERSION = "etf-v3a-stage-d-train-view-v1"
 APPROVED_PILOT_PROTOCOL_IDS = {
     "078af5f6466bd9661443d26f5722a107f67e69298bb0e593c730e7f6f042cc8b"
 }
+APPROVED_CALIBRATION_PROTOCOL_IDS = {
+    "b6f34bf5e0f70ccc39fbd2368a548eaf2c9899023f3b068d90c31444173f6af3"
+}
 APPROVED_FORMAL_PROTOCOL_IDS: set[str] = set()
 STATUS_KEYS = (
     "grammar_invalid",
@@ -299,7 +302,9 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
         raise RuntimeError("V3A Stage D protocol id mismatch")
     mode = protocol.get("mode")
     if mode == "pilot":
-        if actual_id not in APPROVED_PILOT_PROTOCOL_IDS:
+        if actual_id not in (
+            APPROVED_PILOT_PROTOCOL_IDS | APPROVED_CALIBRATION_PROTOCOL_IDS
+        ):
             raise RuntimeError("V3A Stage D pilot protocol is not approved by code")
         if protocol.get("formal_budget_approved") is not False:
             raise RuntimeError("V3A Stage D pilot cannot approve a formal budget")
@@ -350,13 +355,21 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
             raise RuntimeError(f"V3A Stage D {method} attempts are invalid")
         if not seeds and attempts is not None:
             raise RuntimeError(f"V3A Stage D {method} has attempts without seeds")
-    if mode == "pilot":
-        if runs != {
+    is_legacy_pilot = actual_id in APPROVED_PILOT_PROTOCOL_IDS
+    is_reward_calibration = actual_id in APPROVED_CALIBRATION_PROTOCOL_IDS
+    if is_legacy_pilot and runs != {
             "transformer": {"seeds": [314159], "attempts": 50_000},
             "matched_random": {"seeds": [], "attempts": None},
-        }:
-            raise RuntimeError("V3A Stage D pilot budget differs from the approved pilot")
-    else:
+    }:
+        raise RuntimeError("V3A Stage D pilot budget differs from the approved pilot")
+    if is_reward_calibration and runs != {
+        "transformer": {"seeds": [314159], "attempts": 50_000},
+        "matched_random": {"seeds": [], "attempts": None},
+    }:
+        raise RuntimeError(
+            "V3A Stage D reward-calibration budget differs from the approved pilot"
+        )
+    if mode == "formal":
         transformer = runs["transformer"]
         random_run = runs["matched_random"]
         if (
@@ -385,23 +398,46 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
     }:
         raise RuntimeError("V3A Stage D optimizer config mismatch")
     reinforce = protocol.get("reinforce", {})
-    if reinforce != {
+    expected_legacy_reinforce = {
         "advantage": "leave_one_out_batch_zscore",
         "advantage_epsilon": 1e-5,
         "entropy_coefficient": 1e-3,
         "entropy_normalization": "per_decision_including_eos",
         "quality_invalid_uses_hard_invalid_reward": True,
-    }:
+    }
+    expected_calibration_reinforce = {
+        **expected_legacy_reinforce,
+        "training_invalid_reward": -0.01,
+    }
+    expected_reinforce = (
+        expected_legacy_reinforce
+        if is_legacy_pilot
+        else expected_calibration_reinforce
+        if is_reward_calibration
+        else expected_legacy_reinforce
+    )
+    if reinforce != expected_reinforce:
         raise RuntimeError("V3A Stage D REINFORCE config mismatch")
     checkpoint = protocol.get("checkpoint", {})
     if checkpoint != {"every_steps": 10, "max_seconds": 600}:
         raise RuntimeError("V3A Stage D checkpoint config mismatch")
     candidate = protocol.get("candidate_output", {})
-    if (
-        candidate.get("apply_full_funnel") is not True
-        or int(candidate.get("required_selected_count", -1)) != 50
-        or candidate.get("research_conclusion_allowed") is not (mode == "formal")
-    ):
+    expected_legacy_candidate = {
+        "apply_full_funnel": True,
+        "required_selected_count": 50,
+        "research_conclusion_allowed": mode == "formal",
+    }
+    expected_calibration_candidate = {
+        "apply_full_funnel": False,
+        "required_selected_count": 0,
+        "research_conclusion_allowed": False,
+    }
+    expected_candidate = (
+        expected_legacy_candidate
+        if is_legacy_pilot or mode == "formal"
+        else expected_calibration_candidate
+    )
+    if candidate != expected_candidate:
         raise RuntimeError("V3A Stage D candidate-output protocol mismatch")
 
 
