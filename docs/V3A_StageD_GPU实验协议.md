@@ -81,9 +81,9 @@ attempt、累计出现次数、最高 reward 记录和对应 attempt；三个 to
 `formal_budget_approved` 不是 `true`，不得启动 formal run。
 
 当前已写入的 formal protocol 为 `configs/v3a_stage_d_formal_topn.json`，protocol ID 为
-`b815644fedcb84a4b9d17ececf957801a1060b4d95c2dcbef5b615e66ea5873b`。formal binding 为
-`cd9923cdfc301c0f086f96385c44bbae1a5bfc3b3314c8a25036faf82e77104e`，绑定代码 commit
-`1793ee10808f1136589c65e408611a21469392ac`；它已通过身份门禁，但没有启动远端任务。
+`b815644fedcb84a4b9d17ececf957801a1060b4d95c2dcbef5b615e66ea5873b`。formal binding 位于
+`data/processed/v3a/stage_d/formal_topn_binding.json`，具体 binding ID、代码 commit、ResearchSpec
+和 train-view 身份以该 artifact 为准；它已通过身份门禁，但没有启动远端任务。
 
 formal protocol 至少冻结：
 
