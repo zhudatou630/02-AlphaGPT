@@ -101,6 +101,12 @@ class V3AContractTests(unittest.TestCase):
         legacy = {**artifact, "schema_version": "etf-price-artifact-v2"}
         with self.assertRaises(RuntimeError):
             validate_formula_artifact(legacy, research_spec=spec)
+        with self.assertRaisesRegex(RuntimeError, "finite"):
+            build_formula_artifact(
+                replace(record, reward=float("nan")),
+                research_spec=spec,
+                created_at="2026-07-11T00:00:00Z",
+            )
 
     def test_training_funnel_artifact_freezes_representatives_and_members(self) -> None:
         spec = _research_spec()
@@ -123,7 +129,16 @@ class V3AContractTests(unittest.TestCase):
         )
         first = replace(first, cluster_id="cluster_0000")
         second = replace(second, cluster_id="cluster_0000")
-        selection = CandidateSelection((first,), (first, second), {"selected_count": 1})
+        selection = CandidateSelection(
+            (first,),
+            (first, second),
+            {
+                "signal_unique_count": 2,
+                "cluster_count": 1,
+                "selected_count": 1,
+                "selected_bucket_counts": [1, 0, 0],
+            },
+        )
         artifact = build_training_funnel_artifact(
             selection,
             research_spec=spec,
@@ -143,6 +158,15 @@ class V3AContractTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             validate_training_funnel_artifact(
                 tampered, research_spec=spec, candidate_config=config
+            )
+        duplicate_selected = json.loads(json.dumps(artifact))
+        duplicate_selected["selected_formula_hashes"] = [
+            first.formula_hash,
+            first.formula_hash,
+        ]
+        with self.assertRaisesRegex(RuntimeError, "selected formulas"):
+            validate_training_funnel_artifact(
+                duplicate_selected, research_spec=spec, candidate_config=config
             )
 
         candidate_state = {

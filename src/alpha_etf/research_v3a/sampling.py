@@ -85,6 +85,7 @@ class SampleBatch:
     model_sequences: list[list[int]]
     log_prob_sums: torch.Tensor
     entropy_sums: torch.Tensor
+    normalized_entropy_sums: torch.Tensor
     formula_lengths: torch.Tensor
     avg_allowed_actions: float
 
@@ -156,6 +157,9 @@ def sample_formulas(
     lengths = torch.zeros(batch_size, dtype=torch.long, device=device)
     log_prob_sums = torch.zeros(batch_size, dtype=torch.float32, device=device)
     entropy_sums = torch.zeros(batch_size, dtype=torch.float32, device=device)
+    normalized_entropy_sums = torch.zeros(
+        batch_size, dtype=torch.float32, device=device
+    )
     allowed_counts: list[float] = []
 
     for _ in range(config.max_len + 1):
@@ -165,7 +169,15 @@ def sample_formulas(
         dist = Categorical(logits=logits + action_mask)
         action = dist.sample()
         log_prob_sums = log_prob_sums + dist.log_prob(action)
-        entropy_sums = entropy_sums + dist.entropy()
+        step_entropy = dist.entropy()
+        entropy_sums = entropy_sums + step_entropy
+        allowed_per_row = (action_mask == 0.0).sum(dim=1)
+        normalizer = torch.log(allowed_per_row.clamp_min(2).to(step_entropy.dtype))
+        normalized_entropy_sums = normalized_entropy_sums + torch.where(
+            allowed_per_row > 1,
+            step_entropy / normalizer,
+            torch.zeros_like(step_entropy),
+        )
 
         for row, model_id in enumerate(action.detach().cpu().tolist()):
             if bool(done[row].item()):
@@ -192,6 +204,7 @@ def sample_formulas(
         model_sequences=inp.detach().cpu().tolist(),
         log_prob_sums=log_prob_sums,
         entropy_sums=entropy_sums,
+        normalized_entropy_sums=normalized_entropy_sums,
         formula_lengths=lengths.detach().cpu(),
         avg_allowed_actions=float(sum(allowed_counts) / len(allowed_counts))
         if allowed_counts

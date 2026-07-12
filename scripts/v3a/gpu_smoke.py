@@ -36,7 +36,7 @@ from alpha_etf.research_v3a.sampling import (
     sample_formulas,
 )
 from alpha_etf.research_v3a.scoring import ScorerConfig, SplitSpec, build_forward_targets
-from alpha_etf.research_v3a.spec import load_dataset_manifest, load_panel
+from alpha_etf.research_v3a.spec import load_dataset_manifest, load_panel, sha256_file
 from alpha_etf.research_v3a.torch_scoring import TorchForwardTargets, score_signal_batch
 from alpha_etf.research_v3a.torch_vm import BatchTorchVM, compiled_to_tensor
 from scripts.v3a.runtime import DATASET_DIR, build_runtime_research_spec
@@ -299,6 +299,7 @@ def main() -> None:
         "finite_gradients": finite_gradients,
         "checkpoint_step": restored["step"],
         "checkpoint_attempt_count": restored["attempt_count"],
+        "checkpoint_sha256": sha256_file(checkpoint_path),
         "resume_next_batch_equal": True,
         "fixed_formula_max_signal_abs_diff": fixed_summary[
             "max_cpu_torch_signal_abs_diff"

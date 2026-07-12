@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import random
 from pathlib import Path
 from typing import Any
@@ -294,9 +295,19 @@ def validate_checkpoint(
 
 def atomic_save(checkpoint: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    torch.save(checkpoint, temporary)
-    temporary.replace(path)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        torch.save(checkpoint, temporary)
+        with temporary.open("rb") as handle:
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def load_checkpoint(

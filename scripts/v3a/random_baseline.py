@@ -141,11 +141,19 @@ def _write_bytes_idempotent(path: Path, content: bytes) -> None:
         if path.read_bytes() != content:
             raise RuntimeError(f"V3A immutable artifact differs: {path}")
         return
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_bytes(content)
-    with temporary.open("rb") as handle:
-        os.fsync(handle.fileno())
-    temporary.replace(path)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_bytes(content)
+        with temporary.open("rb") as handle:
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        directory = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _write_jsonl_atomic(path: Path, payloads: list[dict[str, Any]]) -> None:

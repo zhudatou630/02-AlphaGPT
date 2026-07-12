@@ -8,6 +8,7 @@ import numpy as np
 from alpha_etf.research_v3a.candidates import (
     CandidateConfig,
     CandidateRecord,
+    SignalSimilarityCache,
     SimilarityContext,
     build_candidate_record,
     canonicalize_expression,
@@ -125,6 +126,50 @@ class V3ACandidateTests(unittest.TestCase):
         actual = signal_similarity(left, right, context, config)
         self.assertEqual(actual.days, used_days)
         self.assertAlmostEqual(actual.rho, expected, places=12)
+
+        cached = SignalSimilarityCache(
+            {"left": left, "right": right}, context, config
+        ).compare("left", "right")
+        self.assertEqual(cached.days, actual.days)
+        self.assertEqual(cached.sufficient, actual.sufficient)
+        self.assertAlmostEqual(cached.rho, actual.rho, places=12)
+
+    def test_similarity_cache_matches_reference_for_identical_finite_masks(self) -> None:
+        rng = np.random.default_rng(91)
+        left = rng.normal(size=(12, 50))
+        right = rng.normal(size=(12, 50))
+        left[0, ::4] = np.nan
+        right[0, ::4] = np.nan
+        context = SimilarityContext(
+            np.arange(50), np.ones((50, 12), dtype=bool)
+        )
+        config = CandidateConfig(min_similarity_days=20, min_similarity_assets=10)
+        reference = signal_similarity(left, right, context, config)
+        cached = SignalSimilarityCache(
+            {"left": left, "right": right}, context, config
+        ).compare("left", "right")
+        self.assertEqual(cached.days, reference.days)
+        self.assertEqual(cached.sufficient, reference.sufficient)
+        self.assertAlmostEqual(cached.rho, reference.rho, places=12)
+
+    def test_similarity_cache_excludes_days_below_asset_minimum(self) -> None:
+        rng = np.random.default_rng(101)
+        left = rng.normal(size=(12, 300))
+        right = rng.normal(size=(12, 300))
+        left[2:, 252:] = np.nan
+        right[2:, 252:] = np.nan
+        context = SimilarityContext(
+            np.arange(300), np.ones((300, 12), dtype=bool)
+        )
+        config = CandidateConfig(min_similarity_days=200, min_similarity_assets=10)
+        reference = signal_similarity(left, right, context, config)
+        cached = SignalSimilarityCache(
+            {"left": left, "right": right}, context, config
+        ).compare("left", "right")
+        self.assertEqual(reference.days, 252)
+        self.assertEqual(cached.days, reference.days)
+        self.assertEqual(cached.sufficient, reference.sufficient)
+        self.assertAlmostEqual(cached.rho, reference.rho, places=12)
 
     def test_candidate_funnel_is_deterministic_and_respects_length_quotas(self) -> None:
         rng = np.random.default_rng(17)

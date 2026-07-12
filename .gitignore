@@ -31,6 +31,17 @@ Thumbs.db
 # Local agent runtime artifacts
 .pi-subagents/
 .pi/local/
+.pi/supervisor/runtime.json
+.pi/supervisor/action-state/
+.pi/supervisor/events/
+.pi/supervisor/failures/
+.pi/supervisor/journal/
+.pi/supervisor/locks/
+.pi/supervisor/observations/
+.pi/supervisor/receipts/
+.pi/supervisor/staging/
+.pi/supervisor/state/
+.pi/supervisor/submissions/
 AGENTS.md
 
 # External reference checkout contains its own .git and a hardcoded token file.

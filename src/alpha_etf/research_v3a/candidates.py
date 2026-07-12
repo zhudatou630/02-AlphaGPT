@@ -67,6 +67,14 @@ class SimilarityResult:
 
 
 @dataclass(frozen=True)
+class _PreparedRanks:
+    eligible: np.ndarray
+    counts: np.ndarray
+    centered: np.ndarray
+    norm: np.ndarray
+
+
+@dataclass(frozen=True)
 class CandidateRecord:
     formula_id: str
     source: str
@@ -365,6 +373,79 @@ def signal_similarity(
     return SimilarityResult(rho=rho, days=days, sufficient=sufficient)
 
 
+class SignalSimilarityCache:
+    """Cache exact daily ranks when two signals share the same finite mask."""
+
+    def __init__(
+        self,
+        signals: dict[str, np.ndarray],
+        context: SimilarityContext,
+        config: CandidateConfig,
+    ) -> None:
+        self.signals = signals
+        self.context = context
+        self.config = config
+        self._prepared: dict[str, _PreparedRanks] = {}
+
+    def _prepare(self, formula_hash: str) -> _PreparedRanks:
+        cached = self._prepared.get(formula_hash)
+        if cached is not None:
+            return cached
+        signal = self.signals[formula_hash]
+        values = signal[:, self.context.decision_indices].T
+        eligible = self.context.available & np.isfinite(values)
+        counts = eligible.sum(axis=1)
+        less = (
+            (values[:, None, :] < values[:, :, None])
+            & eligible[:, None, :]
+        ).sum(axis=-1, dtype=np.float64)
+        equal = (
+            (values[:, None, :] == values[:, :, None])
+            & eligible[:, None, :]
+        ).sum(axis=-1, dtype=np.float64)
+        ranks = less + (equal + 1.0) / 2.0
+        rank_mean = (counts.astype(np.float64) + 1.0) / 2.0
+        centered = np.where(eligible, ranks - rank_mean[:, None], 0.0)
+        norm = np.sqrt(np.sum(centered * centered, axis=1))
+        cached = _PreparedRanks(eligible, counts, centered, norm)
+        self._prepared[formula_hash] = cached
+        return cached
+
+    def compare(self, left_hash: str, right_hash: str) -> SimilarityResult:
+        left = self._prepare(left_hash)
+        right = self._prepare(right_hash)
+        if not np.array_equal(left.eligible, right.eligible):
+            return signal_similarity(
+                self.signals[left_hash],
+                self.signals[right_hash],
+                self.context,
+                self.config,
+            )
+        denominator = left.norm * right.norm
+        usable = (
+            (left.counts >= self.config.min_similarity_assets)
+            & (denominator > 0)
+        )
+        rho_by_day = (
+            np.sum(left.centered[usable] * right.centered[usable], axis=1)
+            / denominator[usable]
+        )
+        valid_counts = left.counts[usable]
+        lower = -1.0 + self.config.fisher_clip
+        upper = 1.0 - self.config.fisher_clip
+        clipped = np.clip(rho_by_day, lower, upper)
+        weights = np.maximum(valid_counts - 3, 1).astype(np.float64)
+        total_weight = float(np.sum(weights))
+        days = int(usable.sum())
+        sufficient = days >= self.config.min_similarity_days and total_weight > 0
+        rho = (
+            float(np.tanh(np.sum(np.arctanh(clipped) * weights) / total_weight))
+            if sufficient
+            else np.nan
+        )
+        return SimilarityResult(rho=rho, days=days, sufficient=sufficient)
+
+
 def _candidate_sort_key(candidate: CandidateRecord) -> tuple[float, int, str]:
     return (-candidate.reward, candidate.token_len, candidate.formula_hash)
 
@@ -443,12 +524,13 @@ def select_training_candidates(
     unique: list[CandidateRecord] = []
     signal_duplicates = 0
     similarity_cache: dict[tuple[str, str], SimilarityResult] = {}
+    rank_cache = SignalSimilarityCache(signals, context, config)
 
     def similarity(left: CandidateRecord, right: CandidateRecord) -> SimilarityResult:
         key = tuple(sorted((left.formula_hash, right.formula_hash)))
         if key not in similarity_cache:
-            similarity_cache[key] = signal_similarity(
-                signals[left.formula_hash], signals[right.formula_hash], context, config
+            similarity_cache[key] = rank_cache.compare(
+                left.formula_hash, right.formula_hash
             )
         return similarity_cache[key]
 

@@ -35,17 +35,46 @@ def git_commit() -> str:
         return "unknown"
 
 
-def code_fingerprint() -> str:
+def code_paths() -> list[Path]:
     paths = sorted((ROOT / "src/alpha_etf/research_v3a").glob("*.py"))
     paths.append(ROOT / "src/alpha_etf/gpt/policy.py")
     paths.extend(sorted((ROOT / "scripts/v3a").glob("*.py")))
+    paths.extend(sorted((ROOT / "scripts/v3a").glob("*.sh")))
+    return sorted(set(paths))
+
+
+def code_fingerprint() -> str:
     digest = hashlib.sha256()
-    for path in sorted(set(paths)):
+    for path in code_paths():
         digest.update(str(path.relative_to(ROOT)).encode("utf-8"))
         digest.update(b"\0")
         digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def require_clean_v3a_code(*, extra_paths: tuple[Path, ...] = ()) -> None:
+    paths = code_paths() + [path.resolve() for path in extra_paths]
+    relative = [str(path.relative_to(ROOT)) for path in sorted(set(paths))]
+    if git_commit() == "unknown":
+        raise RuntimeError("V3A Stage D requires a real Git commit")
+    for path in relative:
+        result = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", path],
+            cwd=ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"V3A Stage D code path is not tracked: {path}")
+    for command in (
+        ["git", "diff", "--quiet", "HEAD", "--", *relative],
+        ["git", "diff", "--cached", "--quiet", "HEAD", "--", *relative],
+    ):
+        result = subprocess.run(command, cwd=ROOT, check=False)
+        if result.returncode != 0:
+            raise RuntimeError("V3A Stage D requires clean, committed code and protocol")
 
 
 def build_runtime_research_spec(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,8 @@ def build_formula_artifact(
     record: CandidateRecord, *, research_spec: dict[str, Any], created_at: str
 ) -> dict[str, Any]:
     validate_research_spec(research_spec)
+    if not math.isfinite(record.reward):
+        raise RuntimeError("V3A artifact reward must be finite")
     payload = {
         "schema_version": ARTIFACT_SCHEMA_VERSION,
         "formula_id": record.formula_id,
@@ -92,6 +95,9 @@ def validate_formula_artifact(
     actual_artifact_id = str(payload.pop("artifact_id", ""))
     if actual_artifact_id != _artifact_id(payload):
         raise RuntimeError("V3A artifact id mismatch")
+    reward = float(artifact["reward"])
+    if not math.isfinite(reward):
+        raise RuntimeError("V3A artifact reward must be finite")
     return CandidateRecord(
         formula_id=str(artifact["formula_id"]),
         source=str(artifact["source"]),
@@ -101,7 +107,7 @@ def validate_formula_artifact(
         expression=compiled.expression.to_dict(),
         canonical_expression=canonical.to_dict(),
         formula_hash=formula_hash,
-        reward=float(artifact["reward"]),
+        reward=reward,
         train_summary=dict(artifact.get("train_summary", {})),
         cluster_id=str(artifact.get("cluster_id", "")),
         first_attempt_index=int(artifact.get("first_attempt_index", -1)),
@@ -195,8 +201,30 @@ def validate_training_funnel_artifact(
         )
     if clusters != expected_clusters:
         raise RuntimeError("V3A training-funnel cluster membership mismatch")
-    if len(selected) > sum(candidate_config.final_quotas) or not set(selected).issubset(record_hashes):
+    if (
+        len(selected) != len(set(selected))
+        or len(selected) > sum(candidate_config.final_quotas)
+        or not set(selected).issubset(record_hashes)
+    ):
         raise RuntimeError("V3A training-funnel selected formulas are invalid")
+    audit = artifact.get("audit")
+    if not isinstance(audit, dict):
+        raise RuntimeError("V3A training-funnel audit is missing")
+    records_by_hash = {
+        str(record["formula_hash"]): candidate_record_from_dict(record)
+        for record in records
+    }
+    selected_bucket_counts = [0, 0, 0]
+    for formula_hash in selected:
+        token_len = records_by_hash[formula_hash].token_len
+        selected_bucket_counts[0 if token_len <= 5 else 1 if token_len <= 10 else 2] += 1
+    if (
+        int(audit.get("signal_unique_count", -1)) != len(records)
+        or int(audit.get("cluster_count", -1)) != len(clusters)
+        or int(audit.get("selected_count", -1)) != len(selected)
+        or audit.get("selected_bucket_counts") != selected_bucket_counts
+    ):
+        raise RuntimeError("V3A training-funnel audit does not reconcile")
     payload = dict(artifact)
     actual_id = str(payload.pop("funnel_artifact_id", ""))
     expected_id = _artifact_id(payload).replace("v3a-formula", "v3a-funnel")

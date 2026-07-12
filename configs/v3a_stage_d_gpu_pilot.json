@@ -1,0 +1,66 @@
+{
+  "schema_version": "etf-v3a-stage-d-protocol-v1",
+  "protocol_id": "078af5f6466bd9661443d26f5722a107f67e69298bb0e593c730e7f6f042cc8b",
+  "name": "v3a-stage-d-gpu-pilot-20260711",
+  "mode": "pilot",
+  "formal_budget_approved": false,
+  "prerequisite": {
+    "stage_c_run_id": "v3a-stage-c-20260711-01",
+    "stage_c_report_sha256": "3d742928cbae05c30acb8fef01eac27dfb458f058ca216ec3b2a8c48bc2947a4",
+    "dataset_id": "etf-v3a-dbdc6d0b7741",
+    "panel_sha256": "fce56f8b3aa5bfc13f7848c47eff5d1f3b449a379c048e25262c7f560494a85f"
+  },
+  "execution": {
+    "device": "cuda",
+    "gpu_class": "rtx_4090d",
+    "local_research_training_forbidden": true
+  },
+  "split": {
+    "name": "train",
+    "start": "2016-08-09",
+    "end": "2021-12-31",
+    "validation_metrics_read": false,
+    "final_metrics_read": false
+  },
+  "runs": {
+    "transformer": {
+      "seeds": [314159],
+      "attempts": 50000
+    },
+    "matched_random": {
+      "seeds": [],
+      "attempts": null
+    }
+  },
+  "batch_size": 256,
+  "model": {
+    "d_model": 64,
+    "num_layers": 2,
+    "num_heads": 4,
+    "ff_dim": 128,
+    "dropout": 0.0,
+    "use_critic_head": false
+  },
+  "optimizer": {
+    "name": "AdamW",
+    "learning_rate": 0.0001,
+    "weight_decay": 0.00001,
+    "gradient_clip_norm": 1.0
+  },
+  "reinforce": {
+    "advantage": "leave_one_out_batch_zscore",
+    "advantage_epsilon": 0.00001,
+    "entropy_coefficient": 0.001,
+    "entropy_normalization": "per_decision_including_eos",
+    "quality_invalid_uses_hard_invalid_reward": true
+  },
+  "checkpoint": {
+    "every_steps": 10,
+    "max_seconds": 600
+  },
+  "candidate_output": {
+    "apply_full_funnel": true,
+    "required_selected_count": 50,
+    "research_conclusion_allowed": false
+  }
+}
