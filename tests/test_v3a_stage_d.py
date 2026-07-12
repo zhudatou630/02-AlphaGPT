@@ -632,6 +632,37 @@ class V3AStageDTests(unittest.TestCase):
                 train_config=stage_d_train_config,
                 scorer_config=scorer_config,
             )
+        reordered = copy.deepcopy(complete_stage_d_checkpoint)
+        reordered["model_state_dict"] = dict(
+            reversed(list(reordered["model_state_dict"].items()))
+        )
+        for group in reordered["optimizer_state_dict"]["param_groups"]:
+            group["params"] = list(reversed(group["params"]))
+        with self.assertRaisesRegex(RuntimeError, "model state structure mismatch"):
+            validate_checkpoint(
+                reordered,
+                research_spec=spec,
+                run_id=run_config["run_id"],
+                model_config=model_config,
+                train_config=stage_d_train_config,
+                scorer_config=scorer_config,
+            )
+        extra_optimizer_tensor = copy.deepcopy(complete_stage_d_checkpoint)
+        extra_payload = next(
+            iter(
+                extra_optimizer_tensor["optimizer_state_dict"]["state"].values()
+            )
+        )
+        extra_payload["extra_tensor"] = torch.tensor(float("inf"))
+        with self.assertRaisesRegex(RuntimeError, "AdamW state is incomplete"):
+            validate_checkpoint(
+                extra_optimizer_tensor,
+                research_spec=spec,
+                run_id=run_config["run_id"],
+                model_config=model_config,
+                train_config=stage_d_train_config,
+                scorer_config=scorer_config,
+            )
         summary = {
             "run_id": run_config["run_id"],
             "protocol_id": run_config["protocol_id"],

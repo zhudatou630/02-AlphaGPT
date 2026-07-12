@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from alpha_etf.gpt.policy import TransformerFormulaPolicy, TransformerPolicyConfig
 from alpha_etf.research_v3a.language import FORMULA_VOCAB
 from alpha_etf.research_v3a.sampling import PolicyVocab
 from alpha_etf.research_v3a.spec import validate_research_spec
@@ -314,6 +315,9 @@ def validate_checkpoint(
         raise RuntimeError("V3A checkpoint train config mismatch")
     if int(checkpoint.get("step", -1)) < 0 or int(checkpoint.get("attempt_count", -1)) < 0:
         raise RuntimeError("V3A checkpoint counters are invalid")
+    is_stage_d_checkpoint = str(train_config.get("schema_version", "")).startswith(
+        "etf-v3a-stage-d-"
+    )
     model_state = checkpoint.get("model_state_dict")
     if (
         not isinstance(model_state, dict)
@@ -331,10 +335,24 @@ def validate_checkpoint(
         )
     ):
         raise RuntimeError("V3A checkpoint model state is invalid")
+    expected_parameters: list[tuple[str, torch.Tensor]] | None = None
+    if is_stage_d_checkpoint:
+        try:
+            with torch.random.fork_rng(devices=[]):
+                expected_model = TransformerFormulaPolicy(
+                    TransformerPolicyConfig(**model_config)
+                )
+            expected_state = expected_model.state_dict()
+            expected_parameters = list(expected_model.named_parameters())
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("V3A Stage D model config is invalid") from exc
+        if list(model_state) != list(expected_state) or not all(
+            model_state[key].shape == expected_state[key].shape
+            and model_state[key].dtype == expected_state[key].dtype
+            for key in expected_state
+        ):
+            raise RuntimeError("V3A Stage D model state structure mismatch")
     optimizer_state = checkpoint.get("optimizer_state_dict")
-    is_stage_d_checkpoint = str(train_config.get("schema_version", "")).startswith(
-        "etf-v3a-stage-d-"
-    )
     if (
         not isinstance(optimizer_state, dict)
         or not isinstance(optimizer_state.get("state"), dict)
@@ -361,18 +379,21 @@ def validate_checkpoint(
             and int(checkpoint["attempt_count"]) > 0
             and (
                 set(optimizer_state["state"]) != set(optimizer_parameter_ids)
-                or len(optimizer_parameter_ids) != len(model_state)
+                or expected_parameters is None
+                or len(optimizer_parameter_ids) != len(expected_parameters)
             )
         )
     ):
         raise RuntimeError("V3A checkpoint optimizer state is incomplete")
     if is_stage_d_checkpoint and int(checkpoint["attempt_count"]) > 0:
-        for parameter_id, parameter in zip(
-            optimizer_parameter_ids, model_state.values(), strict=True
+        if expected_parameters is None:
+            raise RuntimeError("V3A Stage D parameter structure is unavailable")
+        for parameter_id, (_, parameter) in zip(
+            optimizer_parameter_ids, expected_parameters, strict=True
         ):
             payload = optimizer_state["state"][parameter_id]
             required_adamw = {"step", "exp_avg", "exp_avg_sq"}
-            if not isinstance(payload, dict) or required_adamw - set(payload):
+            if not isinstance(payload, dict) or set(payload) != required_adamw:
                 raise RuntimeError("V3A checkpoint AdamW state is incomplete")
             step_value = payload["step"]
             exp_avg = payload["exp_avg"]
