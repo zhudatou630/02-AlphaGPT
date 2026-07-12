@@ -559,6 +559,79 @@ class V3AStageDTests(unittest.TestCase):
                 train_config=stage_d_train_config,
                 scorer_config=scorer_config,
             )
+        stage_model = TransformerFormulaPolicy(model_config_object)
+        stage_optimizer = torch.optim.AdamW(stage_model.parameters(), lr=1e-3)
+        for parameter in stage_model.parameters():
+            parameter.grad = torch.ones_like(parameter)
+        stage_optimizer.step()
+        stage_candidate_state = empty_training_candidate_state(
+            created_at="2026-07-11T00:00:00+00:00"
+        )
+        stage_candidate_state["attempt_count"] = 1
+        complete_stage_d_checkpoint = build_checkpoint(
+            run_id=run_config["run_id"],
+            step=1,
+            attempt_count=1,
+            model=stage_model,
+            optimizer=stage_optimizer,
+            model_config=model_config,
+            train_config=stage_d_train_config,
+            scorer_config=scorer_config,
+            candidate_state=stage_candidate_state,
+            research_spec=spec,
+        )
+        complete_stage_d_checkpoint["rng_state"][
+            "torch_cuda_random_state_all"
+        ] = [torch.ones(4, dtype=torch.uint8)]
+        validate_checkpoint(
+            complete_stage_d_checkpoint,
+            research_spec=spec,
+            run_id=run_config["run_id"],
+            model_config=model_config,
+            train_config=stage_d_train_config,
+            scorer_config=scorer_config,
+        )
+        missing_moments = copy.deepcopy(complete_stage_d_checkpoint)
+        for payload in missing_moments["optimizer_state_dict"]["state"].values():
+            payload.pop("exp_avg")
+            payload.pop("exp_avg_sq")
+        with self.assertRaisesRegex(RuntimeError, "AdamW state is incomplete"):
+            validate_checkpoint(
+                missing_moments,
+                research_spec=spec,
+                run_id=run_config["run_id"],
+                model_config=model_config,
+                train_config=stage_d_train_config,
+                scorer_config=scorer_config,
+            )
+        complex_model = copy.deepcopy(complete_stage_d_checkpoint)
+        model_key = next(iter(complex_model["model_state_dict"]))
+        complex_model["model_state_dict"][model_key] = complex_model[
+            "model_state_dict"
+        ][model_key].to(torch.complex64)
+        with self.assertRaisesRegex(RuntimeError, "model state is invalid"):
+            validate_checkpoint(
+                complex_model,
+                research_spec=spec,
+                run_id=run_config["run_id"],
+                model_config=model_config,
+                train_config=stage_d_train_config,
+                scorer_config=scorer_config,
+            )
+        complex_optimizer = copy.deepcopy(complete_stage_d_checkpoint)
+        first_payload = next(
+            iter(complex_optimizer["optimizer_state_dict"]["state"].values())
+        )
+        first_payload["exp_avg"] = first_payload["exp_avg"].to(torch.complex64)
+        with self.assertRaisesRegex(RuntimeError, "AdamW tensor state is invalid"):
+            validate_checkpoint(
+                complex_optimizer,
+                research_spec=spec,
+                run_id=run_config["run_id"],
+                model_config=model_config,
+                train_config=stage_d_train_config,
+                scorer_config=scorer_config,
+            )
         summary = {
             "run_id": run_config["run_id"],
             "protocol_id": run_config["protocol_id"],

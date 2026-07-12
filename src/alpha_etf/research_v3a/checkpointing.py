@@ -322,6 +322,7 @@ def validate_checkpoint(
             isinstance(key, str)
             and isinstance(value, torch.Tensor)
             and value.numel() > 0
+            and not value.is_complex()
             and (
                 not value.is_floating_point()
                 or bool(torch.isfinite(value).all().item())
@@ -347,39 +348,52 @@ def validate_checkpoint(
         )
     ):
         raise RuntimeError("V3A checkpoint optimizer state is invalid")
-    optimizer_parameter_ids = {
+    optimizer_parameter_ids = [
         parameter_id
         for group in optimizer_state["param_groups"]
-        if isinstance(group, dict)
-        for parameter_id in group.get("params", [])
-    }
+        for parameter_id in group["params"]
+    ]
     if (
         not optimizer_parameter_ids
+        or len(optimizer_parameter_ids) != len(set(optimizer_parameter_ids))
         or (
             is_stage_d_checkpoint
             and int(checkpoint["attempt_count"]) > 0
             and (
-                set(optimizer_state["state"]) != optimizer_parameter_ids
-                or not all(
-                    isinstance(payload, dict)
-                    and bool(payload)
-                    and all(
-                        not isinstance(value, torch.Tensor)
-                        or (
-                            value.numel() > 0
-                            and (
-                                not value.is_floating_point()
-                                or bool(torch.isfinite(value).all().item())
-                            )
-                        )
-                        for value in payload.values()
-                    )
-                    for payload in optimizer_state["state"].values()
-                )
+                set(optimizer_state["state"]) != set(optimizer_parameter_ids)
+                or len(optimizer_parameter_ids) != len(model_state)
             )
         )
     ):
         raise RuntimeError("V3A checkpoint optimizer state is incomplete")
+    if is_stage_d_checkpoint and int(checkpoint["attempt_count"]) > 0:
+        for parameter_id, parameter in zip(
+            optimizer_parameter_ids, model_state.values(), strict=True
+        ):
+            payload = optimizer_state["state"][parameter_id]
+            required_adamw = {"step", "exp_avg", "exp_avg_sq"}
+            if not isinstance(payload, dict) or required_adamw - set(payload):
+                raise RuntimeError("V3A checkpoint AdamW state is incomplete")
+            step_value = payload["step"]
+            exp_avg = payload["exp_avg"]
+            exp_avg_sq = payload["exp_avg_sq"]
+            if (
+                not isinstance(step_value, torch.Tensor)
+                or step_value.numel() != 1
+                or step_value.is_complex()
+                or not bool(torch.isfinite(step_value).all().item())
+                or not isinstance(exp_avg, torch.Tensor)
+                or not isinstance(exp_avg_sq, torch.Tensor)
+                or exp_avg.shape != parameter.shape
+                or exp_avg_sq.shape != parameter.shape
+                or exp_avg.dtype != parameter.dtype
+                or exp_avg_sq.dtype != parameter.dtype
+                or exp_avg.is_complex()
+                or exp_avg_sq.is_complex()
+                or not bool(torch.isfinite(exp_avg).all().item())
+                or not bool(torch.isfinite(exp_avg_sq).all().item())
+            ):
+                raise RuntimeError("V3A checkpoint AdamW tensor state is invalid")
     rng_state = checkpoint.get("rng_state")
     required_rng = {
         "python_random_state",
