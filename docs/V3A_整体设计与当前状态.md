@@ -4,11 +4,12 @@
 
 > 这是一份面向项目协作和人工审核的总览文档。它解释研究问题、系统结构、阶段门禁、代码分工和当前实际状态。
 >
-> 本文是当前个人探索方向的总览，不替代已经生成的历史 protocol 或数据 artifact。现有 Stage D protocol 中关于“完整候选漏斗”的要求属于上一版设计；在重新启动任何 Stage D 之前，必须先按本文的简化方向人工修订协议。涉及具体数据定义、scorer 数学口径、公式语法和身份校验时，仍需对照以下文件和已生成 artifact：
+> 本文是当前个人探索方向的总览，不替代已经生成的历史 protocol 或数据 artifact。旧 Stage D protocol、binding 和 pilot shell 保留为历史冻结件，不再作为当前主路径；任何新的 Stage D 或 formal run 都必须新建并单独批准 protocol/binding。当前默认公式库整理规则已写入 `export_top_formulas.py` 及其 curated artifact。
 >
 > - `docs/V3A_单公式相对选择技术规格.md`
 > - `docs/V3A_StageD_GPU实验协议.md`
 > - `configs/v3a_stage_d_gpu_pilot.json`
+> - `configs/v3a_stage_d_formal_topn.json`
 > - `data/processed/v3a/stage_d/pilot_binding.json`
 
 ## 1. 先看结论
@@ -33,14 +34,14 @@ V3A 是一个个人研究项目，当前目标是先把“自动发现公式并�
 |---|---|---|
 | V3A 数据、因子、公式 VM、scorer | 已实现并通过测试 | 研究输入和计算链路已能运行 |
 | Stage C GPU 工程验证 | 已完成 | CUDA smoke 及随机 baseline 已完成 |
-| Stage D Transformer pilot 训练 | 训练部分完成 | `50000/50000`，checkpoint/resume 已验证 |
-| top-N 公式库输出 | 待简化收尾 | 训练账本已有，原先被复杂漏斗挡住 |
+| Stage D Transformer pilot 训练 | 已完成 | legacy 与 reward-calibration 两个 `50000/50000` run 均完成，checkpoint/resume 已验证 |
+| top-N 公式库输出 | 已完成 | 同时保留 raw top 30/50 和 curated top 30/50 |
 | 全量信号相似度/聚类漏斗 | 暂停 | 不再作为当前主路径 |
-| Formal Transformer + matched-random | 未开始 | 还不是当前目标，也没有批准预算 |
+| Formal Transformer + matched-random | protocol 已写入，尚未启动 | 3+3 seeds、每 seed 1,000,000 attempts；binding 和远端 run 尚未创建 |
 | 2022/2023+ 样本外验证 | 未开始 | 等后续交易问题明确后再考虑 |
 | 纸面交易、执行、实盘 | 未开始 | 不属于当前个人探索阶段 |
 
-这次 Transformer 训练没有形成策略结论，但已经提供了真实训练和 resume 的工程证据。下一步重点是简单地把训练产出的 top 30/50 公式保存出来，而不是继续维护复杂的候选漏斗。
+这次 Transformer 训练没有形成策略结论，但已经提供了真实训练和 resume 的工程证据。两个 pilot 都已从完整账本导出 raw/curated top 30/50。formal protocol 已写入，但 binding、远端部署和启动仍需单独核对与批准；不再让复杂候选漏斗阻塞公式库产出。
 
 ## 2. V3A 要回答的研究问题
 
@@ -173,27 +174,33 @@ Transformer 的作用不是直接预测价格，而是学习“哪些公式结�
 
 如果没有随机对照，单看 Transformer 的最高分没有可靠的解释。
 
-### 4.5 公式库层：先保存 top-N，不先做复杂漏斗
+### 4.5 公式库层：raw 账本加 curated top-N，不把漏斗设为门槛
 
 训练过程中会生成大量公式。当前个人探索阶段最需要的是把这些结果保存下来，供后续人工阅读和交易思路研究，而不是马上构建一个完美的多样性筛选系统。
 
-最小流程只需要：
+当前默认流程是：
 
 ```text
 完整 attempt ledger
     -> canonical 公式去重
-    -> 按训练 reward 和固定 tie-break 排序
-    -> 保存 top 30 / top 50 公式 artifact
+    -> 按训练 reward 和固定 tie-break 保存 raw top 30 / top 50
+    -> 对展示表达式做安全清理
+    -> reward 差距不超过 5e-6 时优先较短表达式
+    -> 保存 curated top 30 / top 50
 ```
 
-每条公式保留 token、可读表达式、canonical hash、reward、质量摘要、首次出现位置和训练身份。这样以后可以研究：
+raw top-N 是原始 reward 排名，curated top-N 是人工阅读入口。Transformer 和未来 random baseline 都应使用这套整理政策。两者都保留原始 token、canonical hash、reward、质量摘要、首次出现位置和训练身份；curated 另外记录清理后的表达式、展示长度、原始 reward 排名和换位原因。
+
+这两个步骤不改变训练 reward、不改变完整 ledger、不改变 canonical hash，也不把短公式说成一定更好。`x*0 -> 0` 仍然禁止，以保留 NaN 语义。当前产物位于每个 run 的 `formula_library/curated_export/`，其中 `curated_analysis.json` 记录 `5e-6` 容差和整理统计。
+
+这样以后可以研究：
 
 - 高分公式都在表达什么结构；
 - Transformer 和 random 的 top-N 有什么差异；
 - 哪些公式适合结合人工交易想法继续改造；
 - 是否值得做多公式组合。
 
-信号相似度、聚类和“多样化 top-N”可以以后作为独立分析模块加入，但不应阻塞最基本的公式库输出，也不是当前 pilot 的核心验收条件。
+信号相似度、聚类和“多样化 top-N”可以以后作为独立分析模块加入，但不应阻塞 raw/curated 公式库输出，也不是当前 pilot 或未来 formal 的默认完成条件。若 formal 研究确实需要多样性比较，必须在 formal protocol 中单独写明。
 
 **本次暴露的问题：**
 
@@ -314,8 +321,8 @@ pilot 是真实训练，但不是正式比较实验。它只有一个 seed，没
 - `10240` 次 checkpoint/resume 成功；
 - 训练耗时和 GPU 运行状态正常；
 - 原候选漏斗运行超过一个小时仍未完成，已人工停止；
-- 训练账本和 checkpoint 保留，但 top-N 输出还没有按简化路径整理出来；
-- 因此训练验证基本完成，公式库输出需要重新按简单路径收尾。
+- 训练账本和 checkpoint 保留，raw/curated top-N 已按简单路径导出；
+- 因此 pilot 的工程验证和公式库产出均已完成，当前停在人审点，不自动进入 formal 或 validation。
 
 ### 5.4 过渡实验：从训练结果到可研究公式库
 
@@ -324,14 +331,15 @@ pilot 是真实训练，但不是正式比较实验。它只有一个 seed，没
 ```text
 从现有训练 checkpoint/ledger 恢复
     -> canonical 去重
-    -> 输出 top 30 / top 50 公式库
+    -> 输出 raw top 30 / top 50
+    -> 输出 curated top 30 / top 50
     -> 人工阅读、分类和记录想法
-    -> 决定下一轮要不要加入 random 对照、交易规则或多公式组合
+    -> 决定 formal 是否需要 matched-random、交易规则或多公式组合
 ```
 
 这一步的产物是研究材料，不是最终策略，也不需要宣称 Transformer 胜过 random。
 
-如果以后确实要做方法比较，再单独补一个轻量 formal protocol，至少固定：
+formal protocol 现在已经写入，但在创建 binding 和启动前仍需再次核对最终代码身份。它固定：
 
 ```text
 Transformer 和 random 是否都要跑
@@ -341,7 +349,8 @@ top-N 如何保存和比较
 是否需要多样性分析
 ```
 
-此前出现过的“Transformer 3 seed、random 3 seed、每 seed 1,000,000 attempts”只是旧的预算建议，目前不采用。
+当前 protocol 采用 Transformer 3 seed、random 3 seed、每 seed 1,000,000 attempts；这只是已写入的
+实验预算，不代表远端任务已经启动。
 
 ### 5.5 后续验证和交易思路过渡
 
@@ -378,13 +387,14 @@ top-N 如何保存和比较
 | CUDA resume probe | `scripts/v3a/gpu_resume_probe.py` |
 | 随机 baseline | `scripts/v3a/random_baseline.py` |
 | 候选漏斗 | `scripts/v3a/select_candidates.py`、`src/alpha_etf/research_v3a/candidates.py` |
+| raw/curated top-N 导出 | `scripts/v3a/export_top_formulas.py`、`scripts/v3a/preview_formula_curation.py` |
 | pilot 编排 | `scripts/v3a/stage_d_gpu_pilot.sh` |
 | checkpoint 校验 | `src/alpha_etf/research_v3a/checkpointing.py` |
 | artifact 校验 | `src/alpha_etf/research_v3a/artifacts.py` |
 
 ### 6.2 冻结身份
 
-当前已生成的 Stage D pilot binding：
+当前已生成的历史 Stage D pilot binding：
 
 ```text
 binding_id:       ea96bc56c6bbcba852efbc4b944991efe171c3afbe8519f07818313e16735054
@@ -393,7 +403,7 @@ train_view_id:    v3a-train-view-5d733fcad4d9c340
 research_spec_id: 1ea1382f50a35b94efa494dc56ceeddb7e0a4f56464d9add297a1249f1a6205b
 ```
 
-它的作用是把以下内容绑在一起：
+它只负责解释和复核历史 pilot，把以下内容绑在一起：
 
 ```text
 代码版本
@@ -405,6 +415,8 @@ research_spec_id: 1ea1382f50a35b94efa494dc56ceeddb7e0a4f56464d9add297a1249f1a620
 
 这样远端即使有旧代码、旧数据或旧产物，也不能悄悄混用。
 
+后续 formal 不能复用这个 binding。formal 必须使用已写入的独立 protocol，并在最终代码 commit 后重新冻结代码、ResearchSpec、train-view、数据身份和新的 binding。curated 导出规则已经写入 formal protocol，也必须随 formal artifact 留痕，但不能反向修改历史 binding。
+
 ### 6.3 当前关键产物
 
 ```text
@@ -414,9 +426,10 @@ data/processed/v3a/stage_d/train_view/
 data/processed/v3a/stage_d/pilot_binding.json
 data/processed/v3a/baseline/runs/
 data/processed/v3a/smoke/
+data/processed/v3a/training/runs/*/formula_library/curated_export/
 ```
 
-Transformer pilot 的远端训练 checkpoint 曾经生成并保留在远端 run 目录中；本次远端任务停止后，没有把它误标为完整 Stage D 结果，也没有把未完成候选漏斗提升为正式 artifact。
+Transformer pilot 的远端训练 checkpoint 曾经生成并保留在远端 run 目录中；本次远端任务停止后，没有把它误标为 formal 结果，也没有把未完成候选漏斗提升为正式 artifact。完整 ledger、raw top-N 和 curated top-N 是当前允许使用的训练期研究材料。
 
 ## 7. 监工机制的实际设计
 
@@ -511,11 +524,11 @@ Transformer pilot 的远端训练 checkpoint 曾经生成并保留在远端 run 
 ```text
 读取现有 checkpoint/ledger
     -> canonical 去重
-    -> 按 reward 排序
-    -> 输出 top 30 / top 50 公式 artifact
+    -> 按 reward 输出 raw top 30 / top 50
+    -> 按固定展示清理和 5e-6 近似并列规则输出 curated top 30 / top 50
 ```
 
-这一步完成后，Stage D pilot 就已经实现了当前个人探索最重要的产出：一批可读、可复用、带训练信息的公式。
+这一步完成后，Stage D pilot 就已经实现了当前个人探索最重要的产出：一批保留原始证据、同时更适合人工阅读的公式。
 
 ### 第二步：人工阅读和记录交易想法
 

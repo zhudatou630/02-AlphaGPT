@@ -897,11 +897,12 @@ def main() -> None:
     _write_jsonl_atomic(run_dir / "training_log.jsonl", training_log)
     elapsed = float(candidate_state["elapsed_seconds"])
     retained = retained_candidates(candidate_state)
-    training_status = (
-        "pilot_calibration_trained"
-        if not protocol["candidate_output"]["apply_full_funnel"]
-        else f"{protocol['mode']}_trained_awaiting_funnel"
-    )
+    if protocol["candidate_output"]["apply_full_funnel"]:
+        training_status = f"{protocol['mode']}_trained_awaiting_funnel"
+    elif protocol["mode"] == "pilot":
+        training_status = "pilot_calibration_trained"
+    else:
+        training_status = "formal_trained_awaiting_curated_library"
     summary: dict[str, Any] = {
         "schema_version": TRAINING_SCHEMA_VERSION,
         "status": training_status,

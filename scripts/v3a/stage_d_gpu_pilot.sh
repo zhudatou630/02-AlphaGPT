@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Historical runner: this entry point is bound to the legacy full-funnel pilot
+# protocol and must not be reused for new Stage D or formal runs. New runs need
+# a separately approved protocol/binding; export_top_formulas.py now emits both
+# raw and curated top-N artifacts without requiring the funnel.
+
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT"
 

@@ -200,7 +200,36 @@ final OOS  2023-01-01 .. 数据末日
 - 化简 `NEG(NEG(x))`、`ABS(ABS(x))`、`SIGN(SIGN(x))`。
 - 不化简 `x*0`，以保留 NaN 语义。
 
-### 7.3 相似度和聚类
+以上是训练 ledger 使用的 `etf-v3a-canonical-v1`。历史 artifact 的 canonical hash 不得因为
+后续展示整理而改变。
+
+### 7.3 当前公式库整理
+
+公式库默认先输出 raw top-N，再输出 curated top-N。两者都来自完整 canonical ledger：
+
+```text
+完整 ledger
+    -> reward_desc / token_len_asc / formula_hash_asc
+    -> raw top 30 / top 50
+    -> 展示层安全清理
+    -> reward 差距 <= 5e-6 时优先清理后更短的公式
+    -> curated top 30 / top 50
+```
+
+展示层清理使用独立的 `etf-v3a-display-simplifier-v1`，不参与训练、不改变 scorer reward、不改变
+canonical hash。当前规则包括：
+
+- `x+0 -> x`、`x-0 -> x`、`x*1 -> x`；
+- `NEG/ABS/SIGN` 的连续安全清理；
+- `CONST_0/CONST_1` 的安全 unary 组合和可表示常数折叠；
+- ADD/MUL 子节点排序；
+- 禁止 `x*0 -> 0`，以保留当前 VM 的 NaN 语义。
+
+每个 curated artifact 通过原有 `etf-v3a-formula-artifact-v1` 校验；`curated_analysis.json` 另外记录
+curated rank、raw rank、换位原因、展示长度和 reward 变化。raw artifact、完整 ledger 和 curated
+artifact 必须同时保留。
+
+### 7.4 可选信号相似度和聚类
 
 逐训练日计算横截面 Spearman，将 rho 截断到 `[-1+1e-7,1-1e-7]` 后按 `n-3` 对 Fisher-z
 加权。至少 252 个重叠日；不足者不得进入候选漏斗。
@@ -212,20 +241,22 @@ final OOS  2023-01-01 .. 数据末日
 在读取 2022 前，按训练 reward 降序、token 长度升序、hash 升序执行固定代表贪心聚类并落盘
 cluster_id。2022 选择器不得重新聚类。
 
-### 7.4 候选数量
+### 7.5 可选候选漏斗数量
 
-训练期流式候选桶：1..5、6..10、11..15 token，各保留 top 500 canonical unique。
+完整候选漏斗是独立的可选分析，不是当前 raw/curated top-N 的完成条件。如果未来 formal protocol
+明确启用，才使用以下旧设计：训练期流式候选桶：1..5、6..10、11..15 token，各保留 top 500
+canonical unique。
 
 - 第一轮每簇最多一条，短/中/长配额 10/10/5。
 - 第二轮要求与已选项 rho<0.995，补到 20/20/10。
 - 桶不足可转移空缺，但重复阈值不变。
-- 训练期最终仅 50 条进入 2022；2022 最多选 5 条。
-- 5 条和全部身份冻结后，才允许运行 2023+ 最终审计。
+- 训练期最终仅 50 条进入 2022；2022 最多选 5 条；这些步骤只有在 formal protocol 明确启用时才成立。
+- 5 条和全部身份冻结后，才允许运行 2023+ 最终审计；当前不读取 2022 或 2023+。
 - canonical 账本按 hash 保留首次 attempt index、总出现次数、最高 reward 记录及其 attempt index。
 - 训练漏斗 artifact 必须保存每个 cluster 的固定代表 hash、完整成员 hash、最终 50 条和排序规则；
   2022 选择器只读取并校验该 artifact。
 
-### 7.5 工程 baseline 与正式漏斗边界
+### 7.6 工程 baseline 与正式漏斗边界
 
 Stage C 的 `100,000 x 3 seed` 是预算前工程 baseline，不生成正式 50 条候选，也不执行
 `rho>=0.90` 聚类和长度配额。每组必须保存全部 attempt 账本，并报告两种不同口径：
@@ -234,8 +265,8 @@ Stage C 的 `100,000 x 3 seed` 是预算前工程 baseline，不生成正式 50 
 - 每桶 reward heap 合并后的 raw-reward 前 50 条中，按第 7.3 节完整 Spearman/Fisher-z 定义计算的
   `rho>=0.995` 信号重复率，分母固定为该组实际可得的前 50 条数量。
 
-这两个指标不得混称。Stage D 的 Transformer 与 matched random 才使用完全相同的完整候选漏斗，
-并各自生成训练期 50 条候选及 training-funnel artifact。
+这两个指标不得混称。Stage C 的历史 baseline 和当前 pilot 不因这两个指标自动生成 formal 候选。
+未来 Transformer 与 matched random 是否使用完整候选漏斗，必须在同一份 formal protocol 中共同冻结。
 
 ## 8. 数值门禁
 

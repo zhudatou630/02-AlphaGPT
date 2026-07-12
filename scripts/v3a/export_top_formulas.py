@@ -31,9 +31,15 @@ from alpha_etf.research_v3a.language import (  # noqa: E402
     Expression,
     compile_formula,
 )
+from scripts.v3a.preview_formula_curation import (  # noqa: E402
+    CURATED_REWARD_TOLERANCE,
+    CURATION_RULE_VERSION,
+    display_formula_metrics,
+)
 
 
 TOP_LIBRARY_SCHEMA_VERSION = "etf-v3a-top-formula-library-v1"
+CURATED_LIBRARY_SCHEMA_VERSION = "etf-v3a-curated-formula-library-v1"
 DEFAULT_OUTPUT_DIR_NAME = "formula_library"
 SEMANTIC_STATUSES = {"canonical_duplicate", "selection_duplicate", "accepted_unique"}
 BASE_FACTORS = {
@@ -65,6 +71,67 @@ def _parse_args() -> argparse.Namespace:
 
 def _sort_key(record: CandidateRecord) -> tuple[float, int, str]:
     return (-float(record.reward), int(record.token_len), str(record.formula_hash))
+
+
+def select_curated_records(
+    records: list[CandidateRecord],
+    *,
+    size: int,
+    display_metrics: dict[str, dict[str, Any]],
+    tolerance: float = CURATED_REWARD_TOLERANCE,
+) -> tuple[list[CandidateRecord], list[dict[str, Any]]]:
+    remaining = list(records)
+    selected: list[CandidateRecord] = []
+    audit: list[dict[str, Any]] = []
+    raw_rank = {record.formula_hash: index for index, record in enumerate(records, start=1)}
+
+    while remaining and len(selected) < size:
+        highest_reward = float(remaining[0].reward)
+        eligible = [
+            record
+            for record in remaining
+            if highest_reward - float(record.reward) <= tolerance
+        ]
+        if tolerance == 0.0:
+            chosen = min(
+                eligible,
+                key=lambda record: (
+                    int(record.token_len),
+                    -float(record.reward),
+                    str(record.formula_hash),
+                ),
+            )
+        else:
+            chosen = min(
+                eligible,
+                key=lambda record: (
+                    int(display_metrics[record.formula_hash]["simplified_token_len"]),
+                    int(record.token_len),
+                    -float(record.reward),
+                    str(record.formula_hash),
+                ),
+            )
+        raw_first = eligible[0]
+        reason = (
+            "reward_order"
+            if chosen.formula_hash == raw_first.formula_hash
+            else "near_tie_shorter"
+        )
+        selected.append(chosen)
+        audit.append(
+            {
+                "curated_rank": len(selected),
+                "raw_reward_rank": raw_rank[chosen.formula_hash],
+                "selection_reason": reason,
+                "reward_tolerance": tolerance,
+                "formula_hash": chosen.formula_hash,
+            }
+        )
+        remaining.remove(chosen)
+
+    if len(selected) != size:
+        raise RuntimeError(f"Only {len(selected)} formulas available for top {size}")
+    return selected, audit
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -352,6 +419,103 @@ def _library_summary(
     return output
 
 
+def _curated_library_summary(
+    *,
+    records: list[CandidateRecord],
+    features: list[dict[str, Any]],
+    selected_by_size: dict[int, list[CandidateRecord]],
+    audits_by_size: dict[int, list[dict[str, Any]]],
+    display_metrics: dict[str, dict[str, Any]],
+    summary: dict[str, Any],
+    checkpoint: dict[str, Any],
+) -> dict[str, Any]:
+    feature_by_hash = {feature["formula_hash"]: feature for feature in features}
+    raw_rank = {record.formula_hash: index for index, record in enumerate(records, start=1)}
+    all_reward = [float(record.reward) for record in records]
+    output: dict[str, Any] = {
+        "schema_version": CURATED_LIBRARY_SCHEMA_VERSION,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "source": {
+            "run_id": summary["run_id"],
+            "protocol_id": summary["protocol_id"],
+            "research_spec_id": checkpoint["research_spec_id"],
+            "attempt_count": int(summary["attempt_count"]),
+            "canonical_valid_formula_count": len(records),
+            "validation_or_final_metrics_read": False,
+        },
+        "ordering": [
+            "highest_remaining_reward_within_tolerance",
+            "simplified_token_len_asc",
+            "token_len_asc",
+            "reward_desc",
+            "formula_hash_asc",
+        ],
+        "curation": {
+            "raw_top_sizes": [30, 50],
+            "curated_top_sizes": [30, 50],
+            "curation_rule_version": CURATION_RULE_VERSION,
+            "reward_tolerance": CURATED_REWARD_TOLERANCE,
+            "training_reward_changed": False,
+            "canonical_hash_changed": False,
+            "raw_preserved": True,
+            "all_canonical_reward_distribution": _reward_distribution(all_reward),
+        },
+        "top": {},
+    }
+    for size, selected_records in selected_by_size.items():
+        audit_by_hash = {
+            item["formula_hash"]: item for item in audits_by_size[size]
+        }
+        selected_features: list[dict[str, Any]] = []
+        selected_rewards = [float(record.reward) for record in selected_records]
+        selected_lengths = np.asarray(
+            [int(record.token_len) for record in selected_records], dtype=np.float64
+        )
+        for curated_rank, record in enumerate(selected_records, start=1):
+            feature = dict(feature_by_hash[record.formula_hash])
+            metric = display_metrics[record.formula_hash]
+            audit = audit_by_hash[record.formula_hash]
+            feature.update(
+                {
+                    "curated_rank": curated_rank,
+                    "raw_reward_rank": raw_rank[record.formula_hash],
+                    "selection_reason": audit["selection_reason"],
+                    "reward_tolerance": CURATED_REWARD_TOLERANCE,
+                    "simplified_formula_text": metric["simplified_formula_text"],
+                    "simplified_token_len": metric["simplified_token_len"],
+                    "simplification_rules": metric["simplification_rules"],
+                }
+            )
+            selected_features.append(feature)
+
+        raw_rewards = [float(record.reward) for record in records[:size]]
+        output["top"][str(size)] = {
+            "count": size,
+            "reward_distribution": _reward_distribution(selected_rewards),
+            "length_distribution": _length_summary(selected_features),
+            "complexity": _complexity_summary(selected_features),
+            "factor_summary": _factor_summary(selected_features),
+            "simple_formula_count_le_6": int(np.sum(selected_lengths <= 6)),
+            "simple_formula_count_le_10": int(np.sum(selected_lengths <= 10)),
+            "simplified_formula_count_le_6": int(
+                sum(feature["simplified_token_len"] <= 6 for feature in selected_features)
+            ),
+            "simplified_formula_count_le_10": int(
+                sum(feature["simplified_token_len"] <= 10 for feature in selected_features)
+            ),
+            "max_length_count": int(np.sum(selected_lengths == 15)),
+            "near_tie_shorter_count": int(
+                sum(item["selection_reason"] == "near_tie_shorter" for item in audits_by_size[size])
+            ),
+            "reward_sum_difference_vs_raw_top_n": float(
+                sum(selected_rewards) - sum(raw_rewards)
+            ),
+            "raw_ranks": [raw_rank[record.formula_hash] for record in selected_records],
+            "formula_previews": selected_features,
+        }
+    return output
+
+
 def _load_attempts(run_dir: Path) -> list[dict[str, Any]]:
     path = run_dir / "attempts.jsonl"
     with path.open("r", encoding="utf-8") as handle:
@@ -450,6 +614,31 @@ def main() -> None:
         top_features[size] = selected_features
         _write_jsonl(output_dir / f"top{size}_formulas.jsonl", artifacts)
 
+    display_metrics = {
+        record.formula_hash: display_formula_metrics(record.token_names)
+        for record in records
+    }
+    curated_records_by_size: dict[int, list[CandidateRecord]] = {}
+    curated_audits_by_size: dict[int, list[dict[str, Any]]] = {}
+    for size in (30, 50):
+        selected, audit = select_curated_records(
+            records,
+            size=size,
+            display_metrics=display_metrics,
+        )
+        curated_records_by_size[size] = selected
+        curated_audits_by_size[size] = audit
+        curated_artifacts: list[dict[str, Any]] = []
+        for record in selected:
+            artifact = build_formula_artifact(
+                record, research_spec=research_spec, created_at=created_at
+            )
+            validate_formula_artifact(artifact, research_spec=research_spec)
+            curated_artifacts.append(artifact)
+        _write_jsonl(
+            output_dir / f"top{size}_curated_formulas.jsonl", curated_artifacts
+        )
+
     attempts = _load_attempts(run_dir)
     analysis = _library_summary(
         records=records,
@@ -463,6 +652,16 @@ def main() -> None:
         str(size): top_features[size][:size] for size in (30, 50)
     }
     _write_json(output_dir / "analysis.json", analysis)
+    curated_analysis = _curated_library_summary(
+        records=records,
+        features=features,
+        selected_by_size=curated_records_by_size,
+        audits_by_size=curated_audits_by_size,
+        display_metrics=display_metrics,
+        summary=summary,
+        checkpoint=checkpoint,
+    )
+    _write_json(output_dir / "curated_analysis.json", curated_analysis)
     print(
         json.dumps(
             {
@@ -471,6 +670,9 @@ def main() -> None:
                 "top30": str(output_dir / "top30_formulas.jsonl"),
                 "top50": str(output_dir / "top50_formulas.jsonl"),
                 "analysis": str(output_dir / "analysis.json"),
+                "curated_top30": str(output_dir / "top30_curated_formulas.jsonl"),
+                "curated_top50": str(output_dir / "top50_curated_formulas.jsonl"),
+                "curated_analysis": str(output_dir / "curated_analysis.json"),
             },
             ensure_ascii=False,
             indent=2,

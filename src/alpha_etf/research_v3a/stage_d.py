@@ -35,7 +35,11 @@ APPROVED_PILOT_PROTOCOL_IDS = {
 APPROVED_CALIBRATION_PROTOCOL_IDS = {
     "b6f34bf5e0f70ccc39fbd2368a548eaf2c9899023f3b068d90c31444173f6af3"
 }
-APPROVED_FORMAL_PROTOCOL_IDS: set[str] = set()
+APPROVED_FORMAL_PROTOCOL_IDS = {
+    "b815644fedcb84a4b9d17ececf957801a1060b4d95c2dcbef5b615e66ea5873b"
+}
+CURATED_FORMULA_LIBRARY_RULE_VERSION = "etf-v3a-display-simplifier-v1"
+CURATED_FORMULA_LIBRARY_REWARD_TOLERANCE = 5e-6
 STATUS_KEYS = (
     "grammar_invalid",
     "vm_invalid",
@@ -294,6 +298,16 @@ def stage_d_protocol_id(protocol: dict[str, Any]) -> str:
     return canonical_sha256(protocol_payload(protocol))
 
 
+def formal_formula_library_policy() -> dict[str, Any]:
+    return {
+        "raw_top_sizes": [30, 50],
+        "curated_top_sizes": [30, 50],
+        "curation_rule_version": CURATED_FORMULA_LIBRARY_RULE_VERSION,
+        "reward_tolerance": CURATED_FORMULA_LIBRARY_REWARD_TOLERANCE,
+        "raw_preserved": True,
+    }
+
+
 def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
     if protocol.get("schema_version") != STAGE_D_PROTOCOL_SCHEMA_VERSION:
         raise RuntimeError("V3A Stage D protocol schema mismatch")
@@ -409,15 +423,19 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
         **expected_legacy_reinforce,
         "training_invalid_reward": -0.01,
     }
-    expected_reinforce = (
-        expected_legacy_reinforce
-        if is_legacy_pilot
-        else expected_calibration_reinforce
-        if is_reward_calibration
-        else expected_legacy_reinforce
-    )
-    if reinforce != expected_reinforce:
-        raise RuntimeError("V3A Stage D REINFORCE config mismatch")
+    if mode == "formal":
+        if reinforce not in (expected_legacy_reinforce, expected_calibration_reinforce):
+            raise RuntimeError("V3A Stage D formal REINFORCE config mismatch")
+    else:
+        expected_reinforce = (
+            expected_legacy_reinforce
+            if is_legacy_pilot
+            else expected_calibration_reinforce
+            if is_reward_calibration
+            else expected_legacy_reinforce
+        )
+        if reinforce != expected_reinforce:
+            raise RuntimeError("V3A Stage D REINFORCE config mismatch")
     checkpoint = protocol.get("checkpoint", {})
     if checkpoint != {"every_steps": 10, "max_seconds": 600}:
         raise RuntimeError("V3A Stage D checkpoint config mismatch")
@@ -432,13 +450,24 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
         "required_selected_count": 0,
         "research_conclusion_allowed": False,
     }
-    expected_candidate = (
-        expected_legacy_candidate
-        if is_legacy_pilot or mode == "formal"
-        else expected_calibration_candidate
-    )
-    if candidate != expected_candidate:
-        raise RuntimeError("V3A Stage D candidate-output protocol mismatch")
+    if mode == "formal":
+        expected_top_n_candidate = {
+            "apply_full_funnel": False,
+            "required_selected_count": 0,
+            "research_conclusion_allowed": True,
+        }
+        if candidate not in (expected_legacy_candidate, expected_top_n_candidate):
+            raise RuntimeError("V3A Stage D formal candidate-output protocol mismatch")
+        if candidate == expected_top_n_candidate and protocol.get("formula_library") != formal_formula_library_policy():
+            raise RuntimeError("V3A Stage D formal formula-library policy mismatch")
+    else:
+        expected_candidate = (
+            expected_legacy_candidate
+            if is_legacy_pilot
+            else expected_calibration_candidate
+        )
+        if candidate != expected_candidate:
+            raise RuntimeError("V3A Stage D candidate-output protocol mismatch")
 
 
 def load_stage_d_protocol(path: Path) -> dict[str, Any]:

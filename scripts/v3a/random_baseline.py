@@ -52,6 +52,13 @@ from alpha_etf.research_v3a.torch_vm import BatchTorchVM, compiled_to_tensor
 from alpha_etf.research_v3a.vm import StackVM
 from alpha_etf.scoring import ScorerConfig as LegacyScorerConfig
 from alpha_etf.scoring import score_signal as score_signal_legacy
+from scripts.v3a.export_top_formulas import (
+    CURATED_LIBRARY_SCHEMA_VERSION,
+    CURATED_REWARD_TOLERANCE,
+    CURATION_RULE_VERSION,
+    select_curated_records,
+)
+from scripts.v3a.preview_formula_curation import display_formula_metrics
 from scripts.v3a.runtime import DATASET_DIR, build_runtime_research_spec
 
 
@@ -932,7 +939,81 @@ def main() -> None:
         )
         for record in top50
     ]
+    display_metrics = {
+        record.formula_hash: display_formula_metrics(record.token_names)
+        for record in ordered_records
+    }
+    curated_top50, curated_audit = select_curated_records(
+        ordered_records,
+        size=50,
+        display_metrics=display_metrics,
+    )
+    curated_artifacts = [
+        build_formula_artifact(
+            record, research_spec=research_spec, created_at=created_at
+        )
+        for record in curated_top50
+    ]
+    for artifact in curated_artifacts:
+        validate_formula_artifact(artifact, research_spec=research_spec)
     _write_jsonl_atomic(run_dir / "top_formulas.jsonl", artifacts)
+    _write_jsonl_atomic(run_dir / "top50_curated_formulas.jsonl", curated_artifacts)
+    raw_rank = {
+        record.formula_hash: rank for rank, record in enumerate(ordered_records, start=1)
+    }
+    audit_by_hash = {item["formula_hash"]: item for item in curated_audit}
+    curated_previews = []
+    for rank, record in enumerate(curated_top50, start=1):
+        metric = display_metrics[record.formula_hash]
+        audit = audit_by_hash[record.formula_hash]
+        curated_previews.append(
+            {
+                "curated_rank": rank,
+                "raw_reward_rank": raw_rank[record.formula_hash],
+                "selection_reason": audit["selection_reason"],
+                "reward_tolerance": CURATED_REWARD_TOLERANCE,
+                "formula_hash": record.formula_hash,
+                "reward": float(record.reward),
+                "raw_formula_text": metric["raw_formula_text"],
+                "simplified_formula_text": metric["simplified_formula_text"],
+                "token_names": list(record.token_names),
+                "token_len": int(record.token_len),
+                "simplified_token_len": int(metric["simplified_token_len"]),
+                "simplification_rules": metric["simplification_rules"],
+            }
+        )
+    _write_json_atomic(
+        run_dir / "curated_analysis.json",
+        {
+            "schema_version": CURATED_LIBRARY_SCHEMA_VERSION,
+            "curation_rule_version": CURATION_RULE_VERSION,
+            "source": {
+                "run_id": run_id,
+                "research_spec_id": research_spec["research_spec_id"],
+                "canonical_valid_formula_count": len(ordered_records),
+                "validation_or_final_metrics_read": False,
+            },
+            "curation": {
+                "raw_top_sizes": [50],
+                "curated_top_sizes": [50],
+                "curation_rule_version": CURATION_RULE_VERSION,
+                "reward_tolerance": CURATED_REWARD_TOLERANCE,
+                "training_reward_changed": False,
+                "canonical_hash_changed": False,
+                "raw_preserved": True,
+                "near_tie_shorter_count": sum(
+                    item["selection_reason"] == "near_tie_shorter"
+                    for item in curated_audit
+                ),
+                "reward_sum_difference_vs_raw_top_n": float(
+                    sum(record.reward for record in curated_top50)
+                    - sum(record.reward for record in top50)
+                ),
+            },
+            "raw_ranks": [raw_rank[record.formula_hash] for record in curated_top50],
+            "formula_previews": curated_previews,
+        },
+    )
     legacy_comparison = _legacy_comparison(
         top50,
         factor_values=factor_numpy,
@@ -988,6 +1069,16 @@ def main() -> None:
         "reward_distribution": _reward_summary(rewards),
         "top_rewards": [record.reward for record in top50],
         "top_formula_hashes": [record.formula_hash for record in top50],
+        "curated_top_formula_hashes": [
+            record.formula_hash for record in curated_top50
+        ],
+        "curated_formula_library": {
+            "raw_path": "top_formulas.jsonl",
+            "curated_path": "top50_curated_formulas.jsonl",
+            "analysis_path": "curated_analysis.json",
+            "reward_tolerance": CURATED_REWARD_TOLERANCE,
+            "curation_rule_version": CURATION_RULE_VERSION,
+        },
         "top_bucket_counts": [
             sum(_bucket(record.token_len) == bucket for record in top50)
             for bucket in range(3)
