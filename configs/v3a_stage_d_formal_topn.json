@@ -1,6 +1,6 @@
 {
   "schema_version": "etf-v3a-stage-d-protocol-v1",
-  "protocol_id": "b815644fedcb84a4b9d17ececf957801a1060b4d95c2dcbef5b615e66ea5873b",
+  "protocol_id": "12e2a0097e8f6b9dbfe04ca79b892c05574d117b3973ea1901c1fed5ec844076",
   "name": "v3a-stage-d-formal-topn-20260712",
   "mode": "formal",
   "formal_budget_approved": true,
@@ -24,15 +24,23 @@
   },
   "runs": {
     "transformer": {
-      "seeds": [101, 102, 103],
-      "attempts": 1000000
+      "seeds": [
+        101,
+        102,
+        103
+      ],
+      "attempts": 8000000
     },
     "matched_random": {
-      "seeds": [101, 102, 103],
-      "attempts": 1000000
+      "seeds": [
+        101,
+        102,
+        103
+      ],
+      "attempts": 8000000
     }
   },
-  "batch_size": 256,
+  "batch_size": 8192,
   "model": {
     "d_model": 64,
     "num_layers": 2,
@@ -43,14 +51,14 @@
   },
   "optimizer": {
     "name": "AdamW",
-    "learning_rate": 0.0001,
-    "weight_decay": 0.00001,
+    "learning_rate": 0.001,
+    "weight_decay": 1e-05,
     "gradient_clip_norm": 1.0
   },
   "reinforce": {
     "advantage": "leave_one_out_batch_zscore",
-    "advantage_epsilon": 0.00001,
-    "entropy_coefficient": 0.001,
+    "advantage_epsilon": 1e-05,
+    "entropy_coefficient": 0.005,
     "entropy_normalization": "per_decision_including_eos",
     "quality_invalid_uses_hard_invalid_reward": true,
     "training_invalid_reward": -0.01
@@ -65,10 +73,16 @@
     "research_conclusion_allowed": true
   },
   "formula_library": {
-    "raw_top_sizes": [30, 50],
-    "curated_top_sizes": [30, 50],
+    "raw_top_sizes": [
+      30,
+      50
+    ],
+    "curated_top_sizes": [
+      30,
+      50
+    ],
     "curation_rule_version": "etf-v3a-display-simplifier-v1",
-    "reward_tolerance": 0.000005,
+    "reward_tolerance": 5e-06,
     "raw_preserved": true
   },
   "comparison": {

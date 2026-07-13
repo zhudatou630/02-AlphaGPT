@@ -36,7 +36,8 @@ APPROVED_CALIBRATION_PROTOCOL_IDS = {
     "b6f34bf5e0f70ccc39fbd2368a548eaf2c9899023f3b068d90c31444173f6af3"
 }
 APPROVED_FORMAL_PROTOCOL_IDS = {
-    "b815644fedcb84a4b9d17ececf957801a1060b4d95c2dcbef5b615e66ea5873b"
+    "b815644fedcb84a4b9d17ececf957801a1060b4d95c2dcbef5b615e66ea5873b",
+    "12e2a0097e8f6b9dbfe04ca79b892c05574d117b3973ea1901c1fed5ec844076",
 }
 CURATED_FORMULA_LIBRARY_RULE_VERSION = "etf-v3a-display-simplifier-v1"
 CURATED_FORMULA_LIBRARY_REWARD_TOLERANCE = 5e-6
@@ -345,8 +346,11 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
         "final_metrics_read": False,
     }:
         raise RuntimeError("V3A Stage D protocol split mismatch")
-    if int(protocol.get("batch_size", -1)) != 256:
-        raise RuntimeError("V3A Stage D batch size must remain 256")
+    expected_batch = 8192 if mode == "formal" else 256
+    if int(protocol.get("batch_size", -1)) != expected_batch:
+        raise RuntimeError(
+            f"V3A Stage D batch size must be {expected_batch} for {mode} mode"
+        )
     if protocol.get("prerequisite") != {
         "stage_c_run_id": "v3a-stage-c-20260711-01",
         "stage_c_report_sha256": "3d742928cbae05c30acb8fef01eac27dfb458f058ca216ec3b2a8c48bc2947a4",
@@ -404,12 +408,13 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
     }:
         raise RuntimeError("V3A Stage D model config mismatch")
     optimizer = protocol.get("optimizer", {})
-    if optimizer != {
+    expected_optimizer = {
         "name": "AdamW",
-        "learning_rate": 1e-4,
+        "learning_rate": 1e-3 if mode == "formal" else 1e-4,
         "weight_decay": 1e-5,
         "gradient_clip_norm": 1.0,
-    }:
+    }
+    if optimizer != expected_optimizer:
         raise RuntimeError("V3A Stage D optimizer config mismatch")
     reinforce = protocol.get("reinforce", {})
     expected_legacy_reinforce = {
@@ -423,8 +428,20 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
         **expected_legacy_reinforce,
         "training_invalid_reward": -0.01,
     }
+    expected_formal_reinforce = {
+        "advantage": "leave_one_out_batch_zscore",
+        "advantage_epsilon": 1e-5,
+        "entropy_coefficient": 5e-3,
+        "entropy_normalization": "per_decision_including_eos",
+        "quality_invalid_uses_hard_invalid_reward": True,
+        "training_invalid_reward": -0.01,
+    }
     if mode == "formal":
-        if reinforce not in (expected_legacy_reinforce, expected_calibration_reinforce):
+        if reinforce not in (
+            expected_legacy_reinforce,
+            expected_calibration_reinforce,
+            expected_formal_reinforce,
+        ):
             raise RuntimeError("V3A Stage D formal REINFORCE config mismatch")
     else:
         expected_reinforce = (
