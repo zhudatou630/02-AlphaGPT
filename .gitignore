@@ -31,19 +31,6 @@ Thumbs.db
 # Local agent runtime artifacts
 .pi-subagents/
 .pi/local/
-.pi/supervisor/runtime.json
-.pi/supervisor/action-state/
-.pi/supervisor/events/
-.pi/supervisor/failures/
-.pi/supervisor/journal/
-.pi/supervisor/locks/
-.pi/supervisor/observations/
-.pi/supervisor/notifications/
-.pi/supervisor/receipts/
-.pi/supervisor/staging/
-.pi/supervisor/state/
-.pi/supervisor/submissions/
-.pi/supervisor/monitor.lock
 AGENTS.md
 
 # External reference checkout contains its own .git and a hardcoded token file.
@@ -65,6 +52,9 @@ data/staging/v3/
 data/raw/v3/
 data/processed/v3/data_quality/
 data/processed/v3/governance/
+
+# V3A training runs, reports and artifacts are large local research outputs.
+data/processed/v3a/
 
 # Per-product market inventory CSVs include Tushare liquidity/share fields.
 data/processed/etf_market_inventory/*.csv
