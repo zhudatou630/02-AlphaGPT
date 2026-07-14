@@ -508,7 +508,12 @@ def main() -> None:
     torch_targets = TorchForwardTargets.from_numpy(
         targets, device=device, dtype=torch.float32
     )
-    vm = BatchTorchVM()
+    _gpu_total = torch.cuda.get_device_properties(device).total_memory
+    vm = BatchTorchVM(
+        max_output_bytes=int(_gpu_total * 0.25),
+        max_working_bytes=int(_gpu_total * 0.25),
+        max_total_bytes=int(_gpu_total * 0.5),
+    )
     torch.cuda.reset_peak_memory_stats(device)
 
     counts = Counter(
