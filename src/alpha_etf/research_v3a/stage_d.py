@@ -38,6 +38,7 @@ APPROVED_CALIBRATION_PROTOCOL_IDS = {
 APPROVED_FORMAL_PROTOCOL_IDS = {
     "b815644fedcb84a4b9d17ececf957801a1060b4d95c2dcbef5b615e66ea5873b",
     "12e2a0097e8f6b9dbfe04ca79b892c05574d117b3973ea1901c1fed5ec844076",
+    "00185964276cf9934870477656c81039252405b35e0e7a86f7194bff55d749a2",
 }
 CURATED_FORMULA_LIBRARY_RULE_VERSION = "etf-v3a-display-simplifier-v1"
 CURATED_FORMULA_LIBRARY_REWARD_TOLERANCE = 5e-6
@@ -332,11 +333,11 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
         raise RuntimeError(f"Unsupported V3A Stage D protocol mode: {mode!r}")
 
     execution = protocol.get("execution", {})
-    if execution != {
-        "device": "cuda",
-        "gpu_class": "rtx_4090d",
-        "local_research_training_forbidden": True,
-    }:
+    approved_executions = (
+        {"device": "cuda", "gpu_class": "rtx_4090d", "local_research_training_forbidden": True},
+        {"device": "cuda", "gpu_class": "rtx_pro_6000", "local_research_training_forbidden": True},
+    )
+    if execution not in approved_executions:
         raise RuntimeError("V3A Stage D protocol must require the approved CUDA host class")
     if protocol.get("split") != {
         "name": "train",

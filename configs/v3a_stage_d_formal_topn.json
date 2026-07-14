@@ -1,6 +1,6 @@
 {
   "schema_version": "etf-v3a-stage-d-protocol-v1",
-  "protocol_id": "12e2a0097e8f6b9dbfe04ca79b892c05574d117b3973ea1901c1fed5ec844076",
+  "protocol_id": "00185964276cf9934870477656c81039252405b35e0e7a86f7194bff55d749a2",
   "name": "v3a-stage-d-formal-topn-20260712",
   "mode": "formal",
   "formal_budget_approved": true,
@@ -12,7 +12,7 @@
   },
   "execution": {
     "device": "cuda",
-    "gpu_class": "rtx_4090d",
+    "gpu_class": "rtx_pro_6000",
     "local_research_training_forbidden": true
   },
   "split": {
