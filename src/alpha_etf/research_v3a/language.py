@@ -363,6 +363,45 @@ MEAN_CODE_BY_WINDOW = {
 COMPILED_VOCAB_SIZE = max(MEAN_CODE_BY_WINDOW.values()) + 1
 
 
+def transition_instruction_code(
+    state: GrammarState, token: FormulaToken
+) -> int | None:
+    """Return the VM instruction emitted by one valid grammar transition."""
+
+    transition_state(state, token)
+    if state.pending_factor:
+        windows = state.pending_windows + (int(token.value),)
+        required = 2 if state.pending_factor == "MA_RATIO" else 1
+        if len(windows) < required:
+            return None
+        name = state.pending_factor + "_" + "_".join(str(value) for value in windows)
+        return FACTOR_NAMES.index(name)
+    if token.kind == "fixed_factor":
+        return FACTOR_NAMES.index(token.name)
+    if token.kind == "constant":
+        return CONST_0_CODE if token.name == "CONST_0" else CONST_1_CODE
+    if token.kind in {"parameter_factor", "window"}:
+        return None
+    if token.name == "ADD":
+        return ADD_CODE
+    if token.name == "SUB":
+        return SUB_CODE
+    if token.name == "MUL":
+        return MUL_CODE
+    if token.name == "NEG":
+        return NEG_CODE
+    if token.name == "ABS":
+        return ABS_CODE
+    if token.name == "SIGN":
+        return SIGN_CODE
+    window = int(state.stack[-1].split(":", 1)[1])
+    if token.name == "REF":
+        return REF_CODE_BY_WINDOW[window]
+    if token.name == "MEAN":
+        return MEAN_CODE_BY_WINDOW[window]
+    raise ValueError(f"Unsupported V3A instruction transition: {token.name}")
+
+
 @dataclass(frozen=True)
 class CompiledFormula:
     source_token_ids: tuple[int, ...]

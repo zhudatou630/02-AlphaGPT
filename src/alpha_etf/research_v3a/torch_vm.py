@@ -107,13 +107,21 @@ class BatchTorchVM:
         lengths: torch.Tensor,
         factor_values: torch.Tensor,
         mask: torch.Tensor,
+        *,
+        max_stack_depth: int | None = None,
     ) -> ExecutionPlan:
         if codes.ndim != 2 or lengths.shape != (codes.shape[0],):
             raise ValueError("Compiled V3A tensor shapes differ")
         if factor_values.shape != (len(FACTOR_NAMES), mask.shape[0], mask.shape[1]):
             raise ValueError(f"factor cache differs from mask: {tuple(factor_values.shape)}")
         batch_size = int(codes.shape[0])
-        max_depth = self._max_stack_depth(codes, lengths)
+        max_depth = (
+            self._max_stack_depth(codes, lengths)
+            if max_stack_depth is None
+            else int(max_stack_depth)
+        )
+        if max_depth < 1:
+            raise ValueError("Compiled V3A formulas require a positive stack depth")
         assets, dates = mask.shape
         element_size = factor_values.element_size()
         output_bytes = batch_size * assets * dates * element_size
@@ -147,10 +155,18 @@ class BatchTorchVM:
         lengths: torch.Tensor,
         factor_values: torch.Tensor,
         mask: torch.Tensor,
+        *,
+        max_stack_depth: int | None = None,
     ) -> BatchVMResult:
         if not (codes.device == lengths.device == factor_values.device == mask.device):
             raise ValueError("V3A Torch VM inputs must be on the same device")
-        plan = self.execution_plan(codes, lengths, factor_values, mask)
+        plan = self.execution_plan(
+            codes,
+            lengths,
+            factor_values,
+            mask,
+            max_stack_depth=max_stack_depth,
+        )
         if plan.chunk_size >= plan.batch_size:
             return self._execute_chunk(
                 codes, lengths, factor_values, mask, max_stack_depth=plan.max_stack_depth

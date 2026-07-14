@@ -51,6 +51,37 @@ class BatchScoreResult:
     selected_indices: torch.Tensor
 
 
+def signal_quality_batch(
+    signals: torch.Tensor,
+    targets: TorchForwardTargets,
+    *,
+    min_coverage: float,
+    constant_std_eps: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Measure finite coverage and cross-panel variation for each formula."""
+
+    decision = signals.index_select(2, targets.decision_indices).permute(0, 2, 1)
+    usable = targets.available.unsqueeze(0) & torch.isfinite(decision)
+    finite_count = usable.sum(dim=(1, 2))
+    total = targets.available.sum().to(signals.dtype)
+    coverage = finite_count.to(signals.dtype) / total
+    cleaned = torch.where(usable, decision, torch.zeros_like(decision))
+    denominator = finite_count.clamp_min(1).to(signals.dtype)
+    mean = cleaned.sum(dim=(1, 2)) / denominator
+    variance = (
+        torch.where(
+            usable,
+            (decision - mean[:, None, None]) ** 2,
+            torch.zeros_like(decision),
+        ).sum(dim=(1, 2))
+        / denominator
+    )
+    std = torch.sqrt(torch.clamp(variance, min=0.0))
+    coverage_valid = coverage >= float(min_coverage)
+    variation_valid = torch.isfinite(std) & (std > float(constant_std_eps))
+    return coverage_valid & variation_valid, coverage, std, variation_valid
+
+
 def score_signal_batch(
     signals: torch.Tensor,
     vm_valid: torch.Tensor,
