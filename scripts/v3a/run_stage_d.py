@@ -55,8 +55,8 @@ DEFAULT_STAGE_C_REPORT = (
 )
 DEFAULT_BINDING = ROOT / "data/processed/v3a/stage_d/pilot_binding.json"
 VM_OUTPUT_MEMORY_FRACTION = 0.25
-VM_WORKING_MEMORY_FRACTION = 0.18
-VM_TOTAL_MEMORY_FRACTION = 0.35
+VM_WORKING_MEMORY_FRACTION = 0.25
+VM_TOTAL_MEMORY_FRACTION = 0.5
 
 
 def parse_args() -> argparse.Namespace:
@@ -156,6 +156,7 @@ def main() -> None:
         "scorer": scorer_config.to_dict(),
         "candidate": candidate_config.to_dict(),
         "scorer_batch_chunk_size": SCORER_BATCH_CHUNK_SIZE,
+        "release_cuda_cache_after_batch": True,
         "vm_memory_fractions": {
             "output": VM_OUTPUT_MEMORY_FRACTION,
             "working": VM_WORKING_MEMORY_FRACTION,

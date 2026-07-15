@@ -289,14 +289,22 @@ class SerialStageDRunner:
             while generated < run_until and not self._stop_requested:
                 generated_step += 1
                 batch_count = min(self.config.batch_size, run_until - generated)
-                pending.append(
-                    self._produce_batch(
-                        attempt_start=generated,
-                        step=generated_step,
-                        batch_count=batch_count,
-                        preparer=preparer,
-                    )
+                produced = self._produce_batch(
+                    attempt_start=generated,
+                    step=generated_step,
+                    batch_count=batch_count,
+                    preparer=preparer,
                 )
+                if self.device.type == "cuda":
+                    cache_started = time.perf_counter()
+                    torch.cuda.empty_cache()
+                    produced = replace(
+                        produced,
+                        gpu_seconds=(
+                            produced.gpu_seconds + time.perf_counter() - cache_started
+                        ),
+                    )
+                pending.append(produced)
                 generated += batch_count
 
                 if not self.config.cpu_gpu_overlap or len(pending) >= 2:
