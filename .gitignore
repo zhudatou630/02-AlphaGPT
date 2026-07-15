@@ -33,6 +33,13 @@ Thumbs.db
 .pi/local/
 AGENTS.md
 
+# Local research evidence and completed watchman runtime state. Keep the
+# human-readable handoff/design records visible to Git; only bulky generated
+# evidence and transient monitor state stay local.
+.pi/profile/results/
+.pi/watch/state/
+.pi/watch/incidents/
+
 # External reference checkout contains its own .git and a hardcoded token file.
 # Keep it local; use the upstream/fork URL as the source of truth instead.
 references/AlphaGPT/
