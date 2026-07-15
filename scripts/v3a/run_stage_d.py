@@ -54,6 +54,9 @@ DEFAULT_STAGE_C_REPORT = (
     ROOT / "data/processed/v3a/stage_c_reports/v3a-stage-c-20260711-01.json"
 )
 DEFAULT_BINDING = ROOT / "data/processed/v3a/stage_d/pilot_binding.json"
+VM_OUTPUT_MEMORY_FRACTION = 0.25
+VM_WORKING_MEMORY_FRACTION = 0.18
+VM_TOTAL_MEMORY_FRACTION = 0.35
 
 
 def parse_args() -> argparse.Namespace:
@@ -153,6 +156,11 @@ def main() -> None:
         "scorer": scorer_config.to_dict(),
         "candidate": candidate_config.to_dict(),
         "scorer_batch_chunk_size": SCORER_BATCH_CHUNK_SIZE,
+        "vm_memory_fractions": {
+            "output": VM_OUTPUT_MEMORY_FRACTION,
+            "working": VM_WORKING_MEMORY_FRACTION,
+            "total": VM_TOTAL_MEMORY_FRACTION,
+        },
         "storage_schedule": {
             "fast_checkpoint_seconds": FAST_CHECKPOINT_SECONDS,
             "candidate_snapshot_seconds": CANDIDATE_SNAPSHOT_SECONDS,
@@ -193,9 +201,9 @@ def main() -> None:
     sampler = TensorFormulaSampler(device=device, policy_vocab=policy_vocab)
     gpu_bytes = torch.cuda.get_device_properties(device).total_memory
     vm = BatchTorchVM(
-        max_output_bytes=int(gpu_bytes * 0.25),
-        max_working_bytes=int(gpu_bytes * 0.25),
-        max_total_bytes=int(gpu_bytes * 0.5),
+        max_output_bytes=int(gpu_bytes * VM_OUTPUT_MEMORY_FRACTION),
+        max_working_bytes=int(gpu_bytes * VM_WORKING_MEMORY_FRACTION),
+        max_total_bytes=int(gpu_bytes * VM_TOTAL_MEMORY_FRACTION),
     )
     torch.cuda.reset_peak_memory_stats(device)
 
