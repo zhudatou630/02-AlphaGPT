@@ -37,6 +37,7 @@ from alpha_etf.research_v3a.stage_d import (
 from alpha_etf.research_v3a.stage_d_runner import (
     CANDIDATE_SNAPSHOT_SECONDS,
     FAST_CHECKPOINT_SECONDS,
+    SCORER_BATCH_CHUNK_SIZE,
     SERIAL_RUNNER_SCHEMA_VERSION,
     SerialStageDConfig,
     SerialStageDRunner,
@@ -151,6 +152,7 @@ def main() -> None:
         "reinforce": protocol["reinforce"] if args.method == "transformer" else None,
         "scorer": scorer_config.to_dict(),
         "candidate": candidate_config.to_dict(),
+        "scorer_batch_chunk_size": SCORER_BATCH_CHUNK_SIZE,
         "storage_schedule": {
             "fast_checkpoint_seconds": FAST_CHECKPOINT_SECONDS,
             "candidate_snapshot_seconds": CANDIDATE_SNAPSHOT_SECONDS,

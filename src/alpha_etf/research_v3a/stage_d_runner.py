@@ -47,8 +47,8 @@ from alpha_etf.research_v3a.stage_d_checkpoint import (
 )
 from alpha_etf.research_v3a.torch_scoring import (
     TorchForwardTargets,
-    score_signal_batch,
-    signal_quality_batch,
+    score_signal_batch_chunked,
+    signal_quality_batch_chunked,
 )
 from alpha_etf.research_v3a.torch_vm import BatchTorchVM
 
@@ -58,6 +58,7 @@ TRAINING_SUMMARY_SCHEMA_VERSION = "etf-v3a-stage-d-training-summary-v2"
 TRAINING_COMPLETE_SCHEMA_VERSION = "etf-v3a-stage-d-training-complete-v2"
 FAST_CHECKPOINT_SECONDS = 30 * 60
 CANDIDATE_SNAPSHOT_SECONDS = 120 * 60
+SCORER_BATCH_CHUNK_SIZE = 4096
 
 
 @dataclass(frozen=True)
@@ -406,17 +407,21 @@ class SerialStageDRunner:
             self.tradable_mask,
             max_stack_depth=self.sampler.tables.max_vm_stack_depth,
         )
-        scored = score_signal_batch(
+        scored = score_signal_batch_chunked(
             vm_result.signal,
             vm_result.valid,
             self.targets,
             self.scorer_config,
+            chunk_size=SCORER_BATCH_CHUNK_SIZE,
         )
-        quality_valid, coverage, finite_std, variation_valid = signal_quality_batch(
-            vm_result.signal,
-            self.targets,
-            min_coverage=self.candidate_config.min_coverage,
-            constant_std_eps=self.candidate_config.constant_std_eps,
+        quality_valid, coverage, finite_std, variation_valid = (
+            signal_quality_batch_chunked(
+                vm_result.signal,
+                self.targets,
+                min_coverage=self.candidate_config.min_coverage,
+                constant_std_eps=self.candidate_config.constant_std_eps,
+                chunk_size=SCORER_BATCH_CHUNK_SIZE,
+            )
         )
         training_rewards = effective_training_rewards(
             scored.reward,

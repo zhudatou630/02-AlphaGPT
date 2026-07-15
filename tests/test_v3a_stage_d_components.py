@@ -47,7 +47,13 @@ from alpha_etf.research_v3a.stage_d_runner import (
     SerialStageDRunner,
 )
 from alpha_etf.research_v3a import stage_d_runner as stage_d_runner_module
-from alpha_etf.research_v3a.torch_scoring import TorchForwardTargets
+from alpha_etf.research_v3a.torch_scoring import (
+    TorchForwardTargets,
+    score_signal_batch,
+    score_signal_batch_chunked,
+    signal_quality_batch,
+    signal_quality_batch_chunked,
+)
 from alpha_etf.research_v3a.torch_vm import BatchTorchVM
 
 
@@ -292,6 +298,35 @@ class V3AStageDComponentTests(unittest.TestCase):
         )
         scorer_config = ScorerConfig()
         candidate_config = CandidateConfig(min_coverage=0.5)
+        scoring_signals = torch.as_tensor(
+            generator.normal(size=(7, 10, 80)), dtype=torch.float32
+        )
+        vm_valid = torch.ones(7, dtype=torch.bool)
+        full_score = score_signal_batch(
+            scoring_signals, vm_valid, targets, scorer_config
+        )
+        chunked_score = score_signal_batch_chunked(
+            scoring_signals, vm_valid, targets, scorer_config, chunk_size=3
+        )
+        for name in full_score.__dataclass_fields__:
+            self.assertTrue(
+                torch.equal(getattr(full_score, name), getattr(chunked_score, name))
+            )
+        full_quality = signal_quality_batch(
+            scoring_signals,
+            targets,
+            min_coverage=candidate_config.min_coverage,
+            constant_std_eps=candidate_config.constant_std_eps,
+        )
+        chunked_quality = signal_quality_batch_chunked(
+            scoring_signals,
+            targets,
+            min_coverage=candidate_config.min_coverage,
+            constant_std_eps=candidate_config.constant_std_eps,
+            chunk_size=3,
+        )
+        for full, chunked in zip(full_quality, chunked_quality):
+            self.assertTrue(torch.equal(full, chunked))
 
         def build_runner(
             run_dir: Path,

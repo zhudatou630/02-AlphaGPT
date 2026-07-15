@@ -82,6 +82,28 @@ def signal_quality_batch(
     return coverage_valid & variation_valid, coverage, std, variation_valid
 
 
+def signal_quality_batch_chunked(
+    signals: torch.Tensor,
+    targets: TorchForwardTargets,
+    *,
+    min_coverage: float,
+    constant_std_eps: float,
+    chunk_size: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    if chunk_size < 1:
+        raise ValueError("Torch quality chunk size must be positive")
+    parts = [
+        signal_quality_batch(
+            signals[start : start + chunk_size],
+            targets,
+            min_coverage=min_coverage,
+            constant_std_eps=constant_std_eps,
+        )
+        for start in range(0, signals.shape[0], chunk_size)
+    ]
+    return tuple(torch.cat(values, dim=0) for values in zip(*parts))
+
+
 def score_signal_batch(
     signals: torch.Tensor,
     vm_valid: torch.Tensor,
@@ -132,4 +154,37 @@ def score_signal_batch(
         daily_absolute_return=daily_absolute,
         daily_excess_return=daily_excess,
         selected_indices=selected,
+    )
+
+
+def score_signal_batch_chunked(
+    signals: torch.Tensor,
+    vm_valid: torch.Tensor,
+    targets: TorchForwardTargets,
+    config: ScorerConfig,
+    *,
+    chunk_size: int,
+) -> BatchScoreResult:
+    if chunk_size < 1:
+        raise ValueError("Torch scorer chunk size must be positive")
+    parts = [
+        score_signal_batch(
+            signals[start : start + chunk_size],
+            vm_valid[start : start + chunk_size],
+            targets,
+            config,
+        )
+        for start in range(0, signals.shape[0], chunk_size)
+    ]
+    return BatchScoreResult(
+        reward=torch.cat([part.reward for part in parts], dim=0),
+        valid=torch.cat([part.valid for part in parts], dim=0),
+        invalid_code=torch.cat([part.invalid_code for part in parts], dim=0),
+        daily_absolute_return=torch.cat(
+            [part.daily_absolute_return for part in parts], dim=0
+        ),
+        daily_excess_return=torch.cat(
+            [part.daily_excess_return for part in parts], dim=0
+        ),
+        selected_indices=torch.cat([part.selected_indices for part in parts], dim=0),
     )
