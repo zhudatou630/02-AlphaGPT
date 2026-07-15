@@ -66,7 +66,9 @@ git worktree remove /home/zhujunshen/Quant/02-AlphaGPT-worktrees/multi-cpu
 
 ## 下一步边界
 
-- 尚未创建下一轮开发分支或worktree。
+- 已从post-formal `main@d25911a`创建分支`stage-d-search-v2`，worktree位于`/home/zhujunshen/Quant/02-AlphaGPT-worktrees/stage-d-search-v2`。
+- 新worktree只复制了本地忽略的`AGENTS.md`项目规则；没有复制formal数据、密钥或旧运行产物。
+- 当前分支尚未修改训练代码、protocol或研究设计参数。
 - 尚未连接905、拉回完整ledger或打开2022 validation。
 - 下一步先由用户选择`docs/V3A_StageD_formal结果与下一轮优化设计.md`中的路径A或路径B。
-- 若开发新搜索机制，从post-formal `main`新建独立branch/worktree；不要修改冻结的`multi-cpu`。
+- 后续新搜索机制的讨论和实现只在`stage-d-search-v2`进行；不要修改冻结的`multi-cpu`。
