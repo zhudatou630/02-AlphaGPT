@@ -18,8 +18,8 @@
 
 当前必须区分三种状态：
 
-- **工程实现事实**：阶段 1 至 4 的本地代码已经完成，并通过合成 fixture。
-- **工程性能结论**：尚未形成，必须在 898 GPU 服务器运行阶段 5 后才能判断。
+- **工程实现事实**：阶段 1 至 5 已经完成；本地合成 fixture 和机器 3 真实 CUDA 门禁均通过。
+- **工程性能结论**：连续吞吐约 7124 attempts/s，800 万容量外推通过，详见阶段 5 验收报告。
 - **正式研究结论**：完全没有形成，六个新 formal run 尚未开始。
 
 ## 2. 当前结论
@@ -50,7 +50,7 @@ CPU 后台路径
     -> 低频候选索引快照
 ```
 
-阶段 1 至 4 已经把这个结构落实到本地代码。当前尚未在真实 CUDA 上证明吞吐、worker 数量、显存余量和快照耗时。
+阶段 1 至 5 已经完成。机器 3 的 RTX PRO 6000 已通过 50-batch、真实 `SIGTERM`/resume、连续运行对照和 matched-random CUDA smoke。详细证据见 `docs/V3A_StageD_阶段5远端工程验收.md`；正式身份链仍未重建，六个正式 run 尚未开始。
 
 ## 3. 研究内核与工程边界
 
@@ -188,14 +188,16 @@ matched random 不创建模型和 optimizer，也不做 backward；其他路径�
 ```text
 sample
 -> BatchTorchVM.execute
--> score_signal_batch
--> signal_quality_batch
+-> score_signal_batch_chunked
+-> signal_quality_batch_chunked
 -> effective_training_rewards
 -> reinforce_objective（仅 Transformer）
 -> backward / gradient clip / optimizer.step（仅 Transformer）
 ```
 
 VM 可直接使用语法表给出的最大栈深度 8，不再为了计算栈深度把整个指令矩阵复制回 CPU 扫描。
+
+scorer 和 quality 按公式维以 4096 条为一块执行，块内仍使用相同的稳定资产排序，再按公式原顺序拼接。GPU 结果搬到 CPU、局部 GPU 对象释放后，runner 主动清空未使用的 CUDA cache，防止缓存跨 batch 累积到显存上限；释放耗时计入 GPU batch 时间。
 
 ### 6.4 GPU 到 CPU 的批量交接
 
@@ -211,11 +213,11 @@ GPU 完成模型更新后，一次性搬运：
 
 ### 6.5 CPU 多进程整理
 
-`AttemptBatchPreparer` 使用持久化 `ProcessPoolExecutor`。默认 16 个 worker，启动方式为 `spawn`：
+`AttemptBatchPreparer` 使用持久化 `ProcessPoolExecutor`。阶段 5 实测后默认 8 个 worker，启动方式为 `spawn`：
 
 - 避免已经初始化 CUDA 后使用不安全的 `fork`；
 - 每个 worker 处理一个连续 chunk；
-- batch 8192、16 worker 时每块约 512 条；
+- batch 8192、8 worker 时每块约 1024 条；
 - worker 只运行纯函数式 compile、canonicalize、canonical hash 和 selection hash；
 - worker 不访问 CUDA、模型、optimizer、RNG、候选索引或文件。
 
@@ -478,9 +480,9 @@ training_complete.json          # 完成后
 - CUDA allocated/reserved memory；
 - 累计 attempts/s。
 
-其中主进程 `RUSAGE_SELF` 不包含全部 worker 内存。阶段 5 必须从 cgroup 外部采样总内存。
+其中主进程 `RUSAGE_SELF` 不包含全部 worker 内存。阶段 5 已通过外部 cgroup 采样补足总内存证据。
 
-`storage_metrics.jsonl`单独记录候选快照、latest/final checkpoint 和完整 checkpoint barrier 的保存耗时与文件大小。阶段 5 可用`--candidate-snapshot-on-stop`在部分运行停止点强制生成非空候选快照；这个开关只用于工程验收，不改变公式和 reward。
+`storage_metrics.jsonl`单独记录候选快照、latest/final checkpoint 和完整 checkpoint barrier 的保存耗时与文件大小。阶段 5 使用`--candidate-snapshot-on-stop`在部分运行停止点强制生成非空候选快照；这个开关只用于工程验收，不改变公式和 reward。
 
 ## 13. 四个本地实施阶段
 
@@ -514,7 +516,7 @@ training_complete.json          # 完成后
 - 单 worker 与多 worker 共用同一 `prepare_attempt_batch`；
 - chunk 按原顺序拼接；
 - worker 异常 fail fast；
-- CLI `--cpu-workers`，当前默认 16。
+- CLI `--cpu-workers`，阶段 5 实测后默认 8。
 
 ### 阶段 4：GPU/CPU 双流水线
 
@@ -572,17 +574,17 @@ OK
 
 ## 15. 当前工作区状态
 
-截至本文更新：
+截至阶段 5 完成：
 
 ```text
-worktree / branch: multi-cpu
-base commit:       607d272
-实现状态:          阶段 1 至 4 本地完成
-git 状态:          新实现尚未提交
-main 合并:         尚未进行
-898 远端:          已关机，尚未部署新代码
-formal 身份链:     尚未重建
-formal 新 run:     0 个
+worktree / branch:  multi-cpu
+tested code commit: df223f60cdc0f78dccec2f80aafb8168b77a692e
+实现状态:           阶段 1 至 5 完成
+工程配置:           8 workers + overlap + per-batch CUDA cache release
+main 合并:          尚未进行
+机器 3:             阶段 5 验收完成
+formal 身份链:      尚未重建
+formal 新 run:      0 个
 ```
 
 当前 `.pi/grill/` 决策记录和 `.pi/profile/` 诊断材料也尚未作为代码提交处理。
@@ -609,7 +611,7 @@ candidate snapshot:   7200 秒
 
 当前 CLI 会把新 storage schedule 写入 run identity，但正式 protocol 本身还没有更新。因此现有 formal protocol、ResearchSpec、train-view manifest 和 binding 都不能直接作为新 formal 身份继续使用。
 
-阶段 5 工程验收通过后，需要：
+阶段 5 已通过。正式训练前仍需要：
 
 1. 更新正式 protocol 的分层保存配置；
 2. 重新计算 protocol ID；
@@ -623,9 +625,9 @@ candidate snapshot:   7200 秒
 
 ## 17. 阶段 5：远端工程验收
 
-阶段 5 的目标不是训练出研究结论，而是证明 800 万规模在目标机器上可运行、可恢复、成本可接受。
+阶段 5 已完成并通过。最终连续吞吐约 7124 attempts/s，GPU 峰值 80,975MiB、余量 16,912MiB，cgroup 峰值 6.76GiB；单 run 外推约 19.5 分钟和 1.60GiB。完整方法、显存问题处理和证据见 `docs/V3A_StageD_阶段5远端工程验收.md`。
 
-### 17.1 上机前准备
+### 17.1 已完成的上机准备
 
 1. 对当前 diff 做最终范围核对；
 2. 将阶段 1 至 4 代码和本文档提交到 `multi-cpu`；
@@ -633,18 +635,18 @@ candidate snapshot:   7200 秒
 4. 增加强制执行一次非空 candidate snapshot 的工程开关；
 5. 准备外部 cgroup CPU、内存、GPU、磁盘采样；
 6. 明确验收目录与正式 run 目录隔离；
-7. 保证测试完成后自动收集产物并关闭 898。
+7. 测试完成后收集并在本地校验证据产物。
 
-### 17.2 worker 数量预选
+### 17.2 worker 数量预选结果
 
-不应直接假定 16 worker 最快。先用少量 batch 比较：
+实际比较：
 
 ```text
 cpu_workers = 1 / 4 / 8 / 16
 overlap     = off / on（至少保留一个对照）
 ```
 
-预选只比较工程吞吐、CPU wait、总 cgroup RSS 和 IPC 代价，不形成研究结果。选择一个稳定配置后，再运行完整 50-batch 门禁。
+8 worker累计吞吐约5128 attempts/s，略高于4 worker；16 worker降到4944且占用更多内存。最终选择8 worker。五种配置的ledger与模型均一致。
 
 ### 17.3 50-batch 工程门禁
 
@@ -654,7 +656,7 @@ overlap     = off / on（至少保留一个对照）
 50 × 8192 = 409,600 attempts
 ```
 
-最低通过条件：
+以下通过条件均已满足：
 
 - 正确性 smoke 和 resume 通过；
 - 稳态吞吐不低于 1000 attempts/s；
@@ -669,7 +671,7 @@ overlap     = off / on（至少保留一个对照）
 - 正常 resume 小于 10 分钟；
 - batch 时间不随 attempt 增长持续恶化。
 
-50-batch测试中需要强制执行：
+50-batch测试已强制执行：
 
 1. 一次快 checkpoint；
 2. 一次非空候选快照；
@@ -677,7 +679,7 @@ overlap     = off / on（至少保留一个对照）
 4. 一次 ledger、snapshot、checkpoint 边界核对；
 5. 一次产物体积和 800 万容量外推。
 
-### 17.4 阶段 5 需要采集的指标
+### 17.4 阶段 5 已采集指标
 
 训练内部日志：
 
@@ -699,9 +701,9 @@ overlap     = off / on（至少保留一个对照）
 - ledger、snapshot、checkpoint 写入时间和字节数；
 - 进程池启动和首批预热时间。
 
-## 18. 远端 profile 后再决定的问题
+## 18. 正式运行中继续观察的问题
 
-以下问题目前有可能成为下一瓶颈，但没有证据支持现在修改：
+以下问题没有阻塞阶段 5，不再在正式训练前继续优化：
 
 ### 18.1 GPU VM 中的 Python/CUDA 同步
 
@@ -709,7 +711,7 @@ overlap     = off / on（至少保留一个对照）
 
 ### 18.2 scorer 的稳定全量排序
 
-当前 scorer 使用稳定 `argsort` 保持并列资产顺序。它会产生较大的 int64 排序结果，但直接改成 `topk` 可能改变并列语义。必须在真实 profile 和研究语义评估后决定。
+当前 scorer 在每个 4096 公式 chunk 内使用稳定 `argsort` 保持并列资产顺序。直接改成 `topk` 可能改变并列语义；阶段 5 吞吐已经通过，不继续改写。
 
 ### 18.3 scorer 与 quality 的重复决策信号扫描
 
@@ -717,18 +719,11 @@ overlap     = off / on（至少保留一个对照）
 
 ### 18.4 ProcessPool IPC
 
-selected indices 等 CPU 输入会按 chunk 通过 spawn IPC 复制。是否需要 shared memory 或固定 pinned 双缓冲，取决于：
-
-- CPU prepare 是否仍为瓶颈；
-- IPC 占比；
-- 1/4/8/16 worker 的收益曲线；
-- 总 cgroup RSS。
-
-如果单进程 CPU 工作已经被 GPU 完全隐藏，应减少 worker，而不是保留复杂度追求 CPU 满载。
+selected indices 等 CPU 输入会按 chunk 通过 spawn IPC 复制。阶段 5 的8-worker配置CPU等待均值只有0.012秒，IPC没有阻塞GPU，当前不引入shared memory或固定pinned双缓冲。
 
 ### 18.5 大索引恢复
 
-加载候选快照后需要从 hash 数组重建两个 Python lookup dict。它不影响正常 batch，但后期 resume 可能出现线性成本。先测 800 万外推，再决定是否需要更紧凑哈希表、分片或数据库。
+加载409,600-attempt候选快照实测0.184秒、RSS增加约134.5MiB，800万线性外推仍远低于门槛，当前不增加数据库或分片。
 
 ## 19. 明确不做的事情
 
@@ -740,11 +735,11 @@ selected indices 等 CPU 输入会按 chunk 通过 spawn IPC 复制。是否需�
 - 不打开 2022 validation 或 2023+ final；
 - 不提前引入数据库；
 - 不为了追求 CPU/GPU 100% 利用率增加无意义计算；
-- 不在远端 profile 前重写 VM 或 scorer；
+- 不在阶段 5 已通过后继续重写 VM 或 scorer；
 - 不建立无界任务队列；
 - 不让 worker 修改全局候选状态或写 ledger；
 - 不把大量逐公式深校验重新放回训练热路径；
-- 不在阶段 5 工程结果出来前启动六个 formal run。
+- 不在正式身份链重建和用户再次批准前启动六个 formal run。
 
 ## 20. 新入口示意
 
@@ -759,7 +754,7 @@ python scripts/v3a/run_stage_d.py \
   --stage-c-report <stage_c_report.json> \
   --binding-file <new_binding.json> \
   --out-dir <engineering_or_formal_runs> \
-  --cpu-workers 16
+  --cpu-workers 8
 ```
 
 matched random 只替换：
@@ -774,7 +769,7 @@ matched random 只替换：
 --disable-cpu-gpu-overlap
 ```
 
-当前不能直接用旧 formal binding 执行以上命令。代码尚未提交，新身份链也未生成。
+当前不能直接用旧 formal binding 执行以上命令。阶段 5 工程 binding 也不能作为 formal binding；必须重建正式身份链。
 
 ## 21. 后续顺序
 
@@ -782,20 +777,16 @@ matched random 只替换：
 
 ```text
 阶段 1-4 本地实现与验证（已完成）
--> 提交 multi-cpu 阶段实现
--> 准备阶段 5 强制快照和外部监控
--> 898 小批量 worker/overlap 预选
--> 898 50-batch 工程门禁
--> 拉回产物并做容量、吞吐和恢复结论
--> 898 关机
--> 用户确认是否接受工程结果
+-> 机器 3 worker/overlap 预选（已完成）
+-> 机器 3 50-batch、SIGTERM/resume和连续对照（已完成）
+-> 容量、吞吐、显存和恢复门禁（已通过）
 -> 更新正式 protocol 和文档
 -> 重建 commit/code fingerprint/ResearchSpec/train-view/binding
 -> 人工核对新身份链
 -> 用户再次批准后，从头执行 3+3 个 formal run
 ```
 
-阶段 5 通过之前，“新框架更快”仍是待验证工程假设；阶段 5 通过之后，也只能说明工程可运行，不能说明 Transformer 在研究上优于 matched random。
+阶段 5 已经证明新框架在目标机器上达到工程门槛，但仍不能说明 Transformer 在研究上优于 matched random。
 
 ## 22. 相关记录
 
@@ -803,6 +794,8 @@ matched random 只替换：
 - `.pi/profile/2026-07-14——formal-s101性能体检结论.md`
 - `.pi/grill/2026-07-14-0737——StageD新架构.md`
 - `.pi/handoff/2026-07-13-Stage_D_formal远端部署.md`
+- `.pi/handoff/2026-07-15-Stage_D_阶段5验收完成.md`
+- `docs/V3A_StageD_阶段5远端工程验收.md`
 - `docs/V3A_StageD_GPU实验协议.md`
 - `docs/V3A_整体设计与当前状态.md`
 

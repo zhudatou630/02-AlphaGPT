@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stage-c-report", type=Path, default=DEFAULT_STAGE_C_REPORT)
     parser.add_argument("--binding-file", type=Path, default=DEFAULT_BINDING)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
-    parser.add_argument("--cpu-workers", type=int, default=16)
+    parser.add_argument("--cpu-workers", type=int, default=8)
     parser.add_argument("--disable-cpu-gpu-overlap", action="store_true")
     parser.add_argument("--candidate-snapshot-on-stop", action="store_true")
     parser.add_argument("--resume", action="store_true")
