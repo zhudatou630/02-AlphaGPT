@@ -35,11 +35,17 @@ APPROVED_PILOT_PROTOCOL_IDS = {
 APPROVED_CALIBRATION_PROTOCOL_IDS = {
     "b6f34bf5e0f70ccc39fbd2368a548eaf2c9899023f3b068d90c31444173f6af3"
 }
-APPROVED_FORMAL_PROTOCOL_IDS = {
+LEGACY_FORMAL_PROTOCOL_IDS = {
     "b815644fedcb84a4b9d17ececf957801a1060b4d95c2dcbef5b615e66ea5873b",
     "12e2a0097e8f6b9dbfe04ca79b892c05574d117b3973ea1901c1fed5ec844076",
     "00185964276cf9934870477656c81039252405b35e0e7a86f7194bff55d749a2",
 }
+CURRENT_FORMAL_PROTOCOL_IDS = {
+    "02cca48d1c8536f90a23a0e0361cb45e64a30e95623afc05ef58bd57a0dca5c1",
+}
+APPROVED_FORMAL_PROTOCOL_IDS = (
+    LEGACY_FORMAL_PROTOCOL_IDS | CURRENT_FORMAL_PROTOCOL_IDS
+)
 CURATED_FORMULA_LIBRARY_RULE_VERSION = "etf-v3a-display-simplifier-v1"
 CURATED_FORMULA_LIBRARY_REWARD_TOLERANCE = 5e-6
 STATUS_KEYS = (
@@ -310,6 +316,28 @@ def formal_formula_library_policy() -> dict[str, Any]:
     }
 
 
+def formal_runtime_policy() -> dict[str, Any]:
+    return {
+        "cpu_workers": 8,
+        "cpu_gpu_overlap": True,
+        "scorer_batch_chunk_size": 4096,
+        "release_cuda_cache_after_batch": True,
+        "vm_memory_fractions": {
+            "output": 0.25,
+            "working": 0.25,
+            "total": 0.5,
+        },
+    }
+
+
+def formal_checkpoint_policy() -> dict[str, Any]:
+    return {
+        "fast_seconds": 1800,
+        "candidate_snapshot_seconds": 7200,
+        "candidate_snapshot_on_stop": True,
+    }
+
+
 def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
     if protocol.get("schema_version") != STAGE_D_PROTOCOL_SCHEMA_VERSION:
         raise RuntimeError("V3A Stage D protocol schema mismatch")
@@ -455,7 +483,12 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
         if reinforce != expected_reinforce:
             raise RuntimeError("V3A Stage D REINFORCE config mismatch")
     checkpoint = protocol.get("checkpoint", {})
-    if checkpoint != {"every_steps": 10, "max_seconds": 600}:
+    if actual_id in CURRENT_FORMAL_PROTOCOL_IDS:
+        if checkpoint != formal_checkpoint_policy():
+            raise RuntimeError("V3A Stage D formal checkpoint config mismatch")
+        if protocol.get("runtime") != formal_runtime_policy():
+            raise RuntimeError("V3A Stage D formal runtime config mismatch")
+    elif checkpoint != {"every_steps": 10, "max_seconds": 600}:
         raise RuntimeError("V3A Stage D checkpoint config mismatch")
     candidate = protocol.get("candidate_output", {})
     expected_legacy_candidate = {
@@ -531,7 +564,7 @@ def method_run_config(
     if seed not in method_config["seeds"]:
         raise RuntimeError(f"Seed {seed} is not registered for V3A Stage D {method}")
     return {
-        "schema_version": "etf-v3a-stage-d-run-config-v1",
+        "schema_version": "etf-v3a-stage-d-run-config-v2",
         "protocol_id": protocol["protocol_id"],
         "protocol_mode": protocol["mode"],
         "method": method,
@@ -542,6 +575,7 @@ def method_run_config(
         "optimizer": protocol["optimizer"],
         "reinforce": protocol["reinforce"],
         "checkpoint": protocol["checkpoint"],
+        "runtime": protocol.get("runtime"),
         "candidate_output": protocol["candidate_output"],
         "split": protocol["split"],
         "device_type": "cuda",

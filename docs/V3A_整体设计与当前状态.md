@@ -1,6 +1,6 @@
 # V3A 整体设计与当前状态
 
-更新时间：2026-07-12
+更新时间：2026-07-15
 
 > 这是一份面向项目协作和人工审核的总览文档。它解释研究问题、系统结构、阶段门禁、代码分工和当前实际状态。
 >
@@ -37,11 +37,11 @@ V3A 是一个个人研究项目，当前目标是先把“自动发现公式并�
 | Stage D Transformer pilot 训练 | 已完成 | legacy 与 reward-calibration 两个 `50000/50000` run 均完成，checkpoint/resume 已验证 |
 | top-N 公式库输出 | 已完成 | 同时保留 raw top 30/50 和 curated top 30/50 |
 | 全量信号相似度/聚类漏斗 | 暂停 | 不再作为当前主路径 |
-| Formal Transformer + matched-random | protocol/binding 已写入，尚未启动 | 3+3 seeds、每 seed 1,000,000 attempts；远端 run 尚未创建 |
+| Formal Transformer + matched-random | 阶段5通过，正在重建身份，尚未启动 | 3+3 seeds、每 seed 8,000,000 attempts；远端 run 尚未创建 |
 | 2022/2023+ 样本外验证 | 未开始 | 等后续交易问题明确后再考虑 |
 | 纸面交易、执行、实盘 | 未开始 | 不属于当前个人探索阶段 |
 
-这次 Transformer 训练没有形成策略结论，但已经提供了真实训练和 resume 的工程证据。两个 pilot 都已从完整账本导出 raw/curated top 30/50。formal protocol 和 binding 已写入并完成身份核对，但远端部署和启动仍需单独批准；不再让复杂候选漏斗阻塞公式库产出。
+历史 pilot 没有形成策略结论，但已经提供真实训练材料。新框架阶段5进一步完成409,600 attempts真实CUDA、`SIGTERM`/resume和连续对照，工程门槛已经通过。formal protocol已更新，最终binding必须由最终commit重建；远端部署和启动仍需单独批准。
 
 ## 2. V3A 要回答的研究问题
 
@@ -349,7 +349,7 @@ top-N 如何保存和比较
 是否需要多样性分析
 ```
 
-当前 protocol 采用 Transformer 3 seed、random 3 seed、每 seed 1,000,000 attempts；这只是已写入的
+当前 protocol 采用 Transformer 3 seed、random 3 seed、每 seed 8,000,000 attempts；这只是已写入的
 实验预算，不代表远端任务已经启动。
 
 ### 5.5 后续验证和交易思路过渡
@@ -383,13 +383,14 @@ top-N 如何保存和比较
 | CUDA 公式 VM | `src/alpha_etf/research_v3a/torch_vm.py` |
 | CPU scorer | `src/alpha_etf/research_v3a/scoring.py` |
 | CUDA scorer | `src/alpha_etf/research_v3a/torch_scoring.py` |
-| Transformer 训练 | `scripts/v3a/train_gpu.py` |
+| Transformer/matched-random统一训练 | `scripts/v3a/run_stage_d.py`、`src/alpha_etf/research_v3a/stage_d_runner.py` |
 | CUDA resume probe | `scripts/v3a/gpu_resume_probe.py` |
-| 随机 baseline | `scripts/v3a/random_baseline.py` |
+| binary ledger与CPU整理 | `src/alpha_etf/research_v3a/attempts.py`、`attempt_workers.py` |
+| 紧凑候选索引 | `src/alpha_etf/research_v3a/candidate_index.py` |
 | 候选漏斗 | `scripts/v3a/select_candidates.py`、`src/alpha_etf/research_v3a/candidates.py` |
 | raw/curated top-N 导出 | `scripts/v3a/export_top_formulas.py`、`scripts/v3a/preview_formula_curation.py` |
 | pilot 编排 | `scripts/v3a/stage_d_gpu_pilot.sh` |
-| checkpoint 校验 | `src/alpha_etf/research_v3a/checkpointing.py` |
+| 新训练checkpoint | `src/alpha_etf/research_v3a/stage_d_checkpoint.py` |
 | artifact 校验 | `src/alpha_etf/research_v3a/artifacts.py` |
 
 ### 6.2 冻结身份
@@ -415,7 +416,7 @@ research_spec_id: 1ea1382f50a35b94efa494dc56ceeddb7e0a4f56464d9add297a1249f1a620
 
 这样远端即使有旧代码、旧数据或旧产物，也不能悄悄混用。
 
-后续 formal 不能复用这个历史 pilot binding。当前 formal 已使用独立 protocol，并冻结了代码、ResearchSpec、train-view、数据身份和新的 binding。curated 导出规则已经写入 formal protocol，也必须随 formal artifact 留痕，但不能反向修改历史 binding。
+后续 formal 不能复用历史 pilot或旧formal binding。当前protocol已冻结研究和运行参数，最终代码提交后必须重建ResearchSpec、train-view和binding。curated导出规则必须随formal artifact留痕，但不能反向修改历史binding。
 
 ### 6.3 当前关键产物
 
@@ -427,8 +428,8 @@ data/processed/v3a/stage_d/pilot_binding.json
 data/processed/v3a/baseline/runs/
 data/processed/v3a/smoke/
 data/processed/v3a/training/runs/*/formula_library/curated_export/
-data/processed/v3a/stage_d/formal_topn_train_view/
-data/processed/v3a/stage_d/formal_topn_binding.json
+data/processed/v3a/stage_d/formal_topn_multicpu_train_view/
+data/processed/v3a/stage_d/formal_topn_multicpu_binding.json
 ```
 
 Transformer pilot 的远端训练 checkpoint 曾经生成并保留在远端 run 目录中；本次远端任务停止后，没有把它误标为 formal 结果，也没有把未完成候选漏斗提升为正式 artifact。完整 ledger、raw top-N 和 curated top-N 是当前允许使用的训练期研究材料。

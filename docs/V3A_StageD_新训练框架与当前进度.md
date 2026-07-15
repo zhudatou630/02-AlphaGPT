@@ -593,35 +593,37 @@ formal 新 run:      0 个
 
 ## 16. 当前 protocol 与身份链的重要提醒
 
-`configs/v3a_stage_d_formal_topn.json` 仍然包含旧 checkpoint 配置：
+`configs/v3a_stage_d_formal_topn.json` 已更新为新分层保存配置：
 
 ```json
 "checkpoint": {
-  "every_steps": 10,
-  "max_seconds": 600
+  "fast_seconds": 1800,
+  "candidate_snapshot_seconds": 7200,
+  "candidate_snapshot_on_stop": true
 }
 ```
 
-新 runner 实际使用：
+同一 protocol 还冻结：
 
 ```text
-fast checkpoint:      1800 秒
-candidate snapshot:   7200 秒
+8 CPU workers
+CPU/GPU overlap = true
+scorer chunk = 4096
+release CUDA cache after each batch = true
+VM memory fractions = 0.25 / 0.25 / 0.50
 ```
 
-当前 CLI 会把新 storage schedule 写入 run identity，但正式 protocol 本身还没有更新。因此现有 formal protocol、ResearchSpec、train-view manifest 和 binding 都不能直接作为新 formal 身份继续使用。
+formal CLI从protocol读取这些参数，并拒绝命令行改变worker或关闭overlap。所有旧formal ResearchSpec、train-view manifest和binding均已失效。
 
 阶段 5 已通过。正式训练前仍需要：
 
-1. 更新正式 protocol 的分层保存配置；
-2. 重新计算 protocol ID；
-3. 提交最终代码，获得新 commit；
-4. 重新计算 code fingerprint 和 ResearchSpec；
-5. 重建 train-view manifest 和 Stage D binding；
-6. 人工核对新身份链；
-7. 再决定是否启动六个 formal run。
+1. 提交最终代码和protocol；
+2. 重新计算code fingerprint和ResearchSpec；
+3. 重建train-view manifest和Stage D binding；
+4. 人工核对六个run的新身份；
+5. 用户再次批准后才能启动。
 
-现有 `docs/V3A_StageD_GPU实验协议.md` 中关于“checkpoint 保存完整 canonical 账本”和旧 formal attempts/身份的内容属于旧实现状态，不能作为新 runner 的实现说明。研究原则仍可参考，但 formal 启动前需要同步更新状态文档。
+历史pilot仍保留旧checkpoint说明；当前formal以本文件、新实验协议和新binding artifact为准。
 
 ## 17. 阶段 5：远端工程验收
 

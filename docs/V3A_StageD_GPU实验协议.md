@@ -6,9 +6,9 @@
 - 本机只允许编写代码、运行单元测试、静态检查和不接触真实 V3A panel 的合成 fixture。
 - Stage D 的小规模训练 pilot 和正式训练都只能在 GPU 服务器执行；不得在本机 CPU 上运行
   具有研究含义的训练。
-- 历史上只批准过 Stage D pilot；当前 Transformer pilot 和 reward calibration pilot 均已完成。正式
-  top-N protocol 已写入 `configs/v3a_stage_d_formal_topn.json`，formal train-view 和 binding 已生成，
-  但尚未启动远端 run。
+- 历史 Transformer pilot 和 reward calibration pilot 均已完成。新框架阶段 5 已通过，当前正式
+  top-N protocol 已更新到 `configs/v3a_stage_d_formal_topn.json`；正式 train-view 和 binding 必须
+  由最终提交重新生成。六个正式 run 尚未启动。
 - 历史 pilot protocol、binding 和 runner 保留用于复核，不作为新的 Stage D 或 formal run 入口。
 - 当前公式库主路径是完整 ledger、raw top 30/50 和 curated top 30/50；完整候选漏斗只作为未来
   可选分析，不再是公式库产出的硬门槛。
@@ -24,9 +24,9 @@
 
 ## 2. Stage D 要回答的问题
 
-当前 Stage D 首先要回答：在固定公式语言、数据区间和 scorer 下，Transformer 能否稳定生成一批
-可供后续研究的 ETF 排名公式，并保存完整、可复核的公式库。若之后批准 Transformer 与随机方法
-的正式比较，再在新的 formal protocol 中明确是否加入相似度、聚类和多样性漏斗。
+当前 Stage D 要回答：在固定公式语言、数据区间、scorer 和相同 attempts 预算下，Transformer 搜索
+是否优于 matched random，并为两种方法保存完整、可复核的公式库。比较只限搜索层，不等于策略或
+样本外结论；相似度、聚类和多样性漏斗不属于本次 formal 默认路径。
 
 不得用单条最高分作为研究结论。当前输出优先保留 raw top-N 和 curated top-N；curated 只做训练后
 展示整理，不改变 reward、ledger 或 canonical hash。
@@ -71,19 +71,19 @@ pilot 通过条件：
 连续 unary 操作和常数 unary 组合；禁止 `x*0 -> 0`。当 reward 差距不超过 `5e-6` 时，优先展示
 清理后更短的公式。原始 top-N 和完整 ledger 必须保留。
 
-训练 checkpoint 还必须保存完整但紧凑的 canonical 账本，包括每个 quality-valid hash 的首次
-attempt、累计出现次数、最高 reward 记录和对应 attempt；三个 top-500 bucket 只是该账本的有序
-引用，不能代替完整账本。
+以上是历史 pilot 的 checkpoint 设计。新 formal 使用 append-only binary ledger 作为 attempt 事实
+来源，候选索引是可由“候选快照 + 增量 ledger”重建的缓存；快 checkpoint 不再重复保存完整
+canonical 历史。
 
 ## 4. Formal protocol 门禁
 
 正式训练入口必须 fail closed：没有独立、带摘要的 formal protocol，或其中
 `formal_budget_approved` 不是 `true`，不得启动 formal run。
 
-当前已写入的 formal protocol 为 `configs/v3a_stage_d_formal_topn.json`，protocol ID 为
-`b815644fedcb84a4b9d17ececf957801a1060b4d95c2dcbef5b615e66ea5873b`。formal binding 位于
-`data/processed/v3a/stage_d/formal_topn_binding.json`，具体 binding ID、代码 commit、ResearchSpec
-和 train-view 身份以该 artifact 为准；它已通过身份门禁，但没有启动远端任务。
+当前 formal protocol 为 `configs/v3a_stage_d_formal_topn.json`，protocol ID 为
+`02cca48d1c8536f90a23a0e0361cb45e64a30e95623afc05ef58bd57a0dca5c1`。新 formal binding 位于
+`data/processed/v3a/stage_d/formal_topn_multicpu_binding.json`；具体 binding ID、代码 commit、
+ResearchSpec 和 train-view 身份以该 artifact 为准。任何旧 formal binding 都已失效。
 
 formal protocol 至少冻结：
 
@@ -95,18 +95,33 @@ formal protocol 至少冻结：
 - 最大恢复次数、费用/时长边界与完成后关机策略；
 - 代码、数据、ResearchSpec 和 protocol identity pins。
 
+当前 protocol 还冻结以下阶段 5 已验收运行参数：
+
+```text
+CPU workers                 8
+CPU/GPU overlap             true
+scorer batch chunk          4096
+release CUDA cache/batch    true
+VM memory fractions         output 0.25 / working 0.25 / total 0.50
+fast checkpoint             1800 秒
+candidate snapshot          7200 秒
+graceful stop snapshot      true
+```
+
+formal入口从protocol读取这组参数，并拒绝命令行改变worker或关闭overlap。
+
 如果 formal 选择当前 top-N 主路径，protocol 还必须冻结以下 formula-library policy：raw/curated
 尺寸为 `30/50`、整理版本为 `etf-v3a-display-simplifier-v1`、reward 容差为 `5e-6`，并明确
 保留 raw artifact。代码会拒绝缺少这组政策的 top-N formal protocol。
 
 本 protocol 已冻结：Transformer 与 matched random 各使用 seeds `101/102/103`，每个 seed
-`1,000,000 attempts`。这是写入 protocol 的实验预算，不代表任务已经启动；部署前仍需基于最终
-代码 commit 生成新的 binding，并由用户单独确认启动。
+`8,000,000 attempts`。这是实验预算，不代表任务已经启动；必须先基于最终代码 commit 生成并核对
+新 binding，再由用户单独确认启动。
 
 ## 5. 后续停点
 
 1. 历史 pilot 和 reward calibration 的 raw/curated 公式库先完成人工阅读；
 2. `training_invalid_reward=-0.01` 和 curated `5e-6` 已写入 formal protocol；
-3. formal binding 已生成，代码、数据、ResearchSpec 和 train-view 身份已完成核对；
-4. 用户明确批准启动后，才在 GPU 服务器部署该 commit 并运行 CUDA 身份/smoke；
+3. 新 formal binding 必须绑定最终代码、ResearchSpec、train-view 和 Stage C 报告；
+4. 身份核对完成且用户明确批准启动后，才在 GPU 服务器部署并运行；
 5. formal Stage D 完成后再次停止，不自动打开 2022。

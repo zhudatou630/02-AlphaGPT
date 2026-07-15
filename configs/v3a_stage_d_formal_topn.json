@@ -1,7 +1,7 @@
 {
   "schema_version": "etf-v3a-stage-d-protocol-v1",
-  "protocol_id": "00185964276cf9934870477656c81039252405b35e0e7a86f7194bff55d749a2",
-  "name": "v3a-stage-d-formal-topn-20260712",
+  "protocol_id": "02cca48d1c8536f90a23a0e0361cb45e64a30e95623afc05ef58bd57a0dca5c1",
+  "name": "v3a-stage-d-formal-topn-20260715",
   "mode": "formal",
   "formal_budget_approved": true,
   "prerequisite": {
@@ -64,8 +64,20 @@
     "training_invalid_reward": -0.01
   },
   "checkpoint": {
-    "every_steps": 10,
-    "max_seconds": 600
+    "fast_seconds": 1800,
+    "candidate_snapshot_seconds": 7200,
+    "candidate_snapshot_on_stop": true
+  },
+  "runtime": {
+    "cpu_workers": 8,
+    "cpu_gpu_overlap": true,
+    "scorer_batch_chunk_size": 4096,
+    "release_cuda_cache_after_batch": true,
+    "vm_memory_fractions": {
+      "output": 0.25,
+      "working": 0.25,
+      "total": 0.5
+    }
   },
   "candidate_output": {
     "apply_full_funnel": false,

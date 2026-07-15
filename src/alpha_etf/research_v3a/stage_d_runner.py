@@ -53,7 +53,7 @@ from alpha_etf.research_v3a.torch_scoring import (
 from alpha_etf.research_v3a.torch_vm import BatchTorchVM
 
 
-SERIAL_RUNNER_SCHEMA_VERSION = "etf-v3a-stage-d-serial-runner-v2"
+SERIAL_RUNNER_SCHEMA_VERSION = "etf-v3a-stage-d-serial-runner-v3"
 TRAINING_SUMMARY_SCHEMA_VERSION = "etf-v3a-stage-d-training-summary-v2"
 TRAINING_COMPLETE_SCHEMA_VERSION = "etf-v3a-stage-d-training-complete-v2"
 FAST_CHECKPOINT_SECONDS = 30 * 60
@@ -75,6 +75,8 @@ class SerialStageDConfig:
     advantage_epsilon: float
     entropy_coefficient: float
     gradient_clip_norm: float
+    scorer_batch_chunk_size: int = SCORER_BATCH_CHUNK_SIZE
+    release_cuda_cache_after_batch: bool = True
     checkpoint_seconds: float = FAST_CHECKPOINT_SECONDS
     candidate_snapshot_seconds: float = CANDIDATE_SNAPSHOT_SECONDS
     candidate_snapshot_on_stop: bool = False
@@ -86,6 +88,8 @@ class SerialStageDConfig:
             raise ValueError("Stage D attempts and batch size are invalid")
         if self.cpu_worker_count < 1:
             raise ValueError("Stage D CPU worker count must be positive")
+        if self.scorer_batch_chunk_size < 1:
+            raise ValueError("Stage D scorer batch chunk size must be positive")
         if self.method == "transformer" and self.attempts % self.batch_size == 1:
             raise ValueError("Stage D Transformer cannot end with a one-formula batch")
         if self.checkpoint_seconds <= 0 or self.candidate_snapshot_seconds <= 0:
@@ -295,7 +299,7 @@ class SerialStageDRunner:
                     batch_count=batch_count,
                     preparer=preparer,
                 )
-                if self.device.type == "cuda":
+                if self.device.type == "cuda" and self.config.release_cuda_cache_after_batch:
                     cache_started = time.perf_counter()
                     torch.cuda.empty_cache()
                     produced = replace(
@@ -420,7 +424,7 @@ class SerialStageDRunner:
             vm_result.valid,
             self.targets,
             self.scorer_config,
-            chunk_size=SCORER_BATCH_CHUNK_SIZE,
+            chunk_size=self.config.scorer_batch_chunk_size,
         )
         quality_valid, coverage, finite_std, variation_valid = (
             signal_quality_batch_chunked(
@@ -428,7 +432,7 @@ class SerialStageDRunner:
                 self.targets,
                 min_coverage=self.candidate_config.min_coverage,
                 constant_std_eps=self.candidate_config.constant_std_eps,
-                chunk_size=SCORER_BATCH_CHUNK_SIZE,
+                chunk_size=self.config.scorer_batch_chunk_size,
             )
         )
         training_rewards = effective_training_rewards(

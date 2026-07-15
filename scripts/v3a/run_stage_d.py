@@ -69,12 +69,57 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stage-c-report", type=Path, default=DEFAULT_STAGE_C_REPORT)
     parser.add_argument("--binding-file", type=Path, default=DEFAULT_BINDING)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
-    parser.add_argument("--cpu-workers", type=int, default=8)
+    parser.add_argument("--cpu-workers", type=int)
     parser.add_argument("--disable-cpu-gpu-overlap", action="store_true")
     parser.add_argument("--candidate-snapshot-on-stop", action="store_true")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--stop-after", type=int)
     return parser.parse_args()
+
+
+def _resolve_runtime(
+    protocol: dict[str, object], args: argparse.Namespace
+) -> dict[str, object]:
+    if protocol["mode"] == "formal":
+        runtime = dict(protocol["runtime"])
+        checkpoint = dict(protocol["checkpoint"])
+        expected_workers = int(runtime["cpu_workers"])
+        expected_overlap = bool(runtime["cpu_gpu_overlap"])
+        expected_snapshot_on_stop = bool(checkpoint["candidate_snapshot_on_stop"])
+        if args.cpu_workers is not None and args.cpu_workers != expected_workers:
+            raise RuntimeError("Formal Stage D CPU worker override differs from protocol")
+        if args.disable_cpu_gpu_overlap and expected_overlap:
+            raise RuntimeError("Formal Stage D overlap override differs from protocol")
+        if args.candidate_snapshot_on_stop and not expected_snapshot_on_stop:
+            raise RuntimeError("Formal Stage D snapshot override differs from protocol")
+        return {
+            **runtime,
+            **checkpoint,
+        }
+    return {
+        "cpu_workers": 8 if args.cpu_workers is None else args.cpu_workers,
+        "cpu_gpu_overlap": not args.disable_cpu_gpu_overlap,
+        "scorer_batch_chunk_size": SCORER_BATCH_CHUNK_SIZE,
+        "release_cuda_cache_after_batch": True,
+        "vm_memory_fractions": {
+            "output": VM_OUTPUT_MEMORY_FRACTION,
+            "working": VM_WORKING_MEMORY_FRACTION,
+            "total": VM_TOTAL_MEMORY_FRACTION,
+        },
+        "fast_seconds": FAST_CHECKPOINT_SECONDS,
+        "candidate_snapshot_seconds": CANDIDATE_SNAPSHOT_SECONDS,
+        "candidate_snapshot_on_stop": args.candidate_snapshot_on_stop,
+    }
+
+
+def _resolve_run_id(protocol: dict[str, object], args: argparse.Namespace) -> str:
+    expected = (
+        f"v3a-stage-d-{protocol['mode']}-{args.method}-s{args.seed}-"
+        f"{str(protocol['protocol_id'])[:12]}"
+    )
+    if protocol["mode"] == "formal" and args.run_id not in (None, expected):
+        raise RuntimeError("Formal Stage D run ID override differs from protocol")
+    return args.run_id or expected
 
 
 def _seed_everything(seed: int) -> None:
@@ -107,6 +152,7 @@ def main() -> None:
     args = parse_args()
     protocol = load_stage_d_protocol(args.protocol_file)
     method_config = method_run_config(protocol, method=args.method, seed=args.seed)
+    runtime = _resolve_runtime(protocol, args)
     verify_stage_c_prerequisite(protocol, args.stage_c_report)
     require_clean_v3a_code(extra_paths=(args.protocol_file,))
     device = require_stage_d_cuda(protocol)
@@ -131,10 +177,7 @@ def main() -> None:
         stage_c_report_sha256=sha256_file(args.stage_c_report),
     )
 
-    run_id = args.run_id or (
-        f"v3a-stage-d-{protocol['mode']}-{args.method}-s{args.seed}-"
-        f"{protocol['protocol_id'][:12]}"
-    )
+    run_id = _resolve_run_id(protocol, args)
     policy_vocab = PolicyVocab()
     model_config = _model_config(protocol, policy_vocab)
     run_identity = {
@@ -155,18 +198,7 @@ def main() -> None:
         "reinforce": protocol["reinforce"] if args.method == "transformer" else None,
         "scorer": scorer_config.to_dict(),
         "candidate": candidate_config.to_dict(),
-        "scorer_batch_chunk_size": SCORER_BATCH_CHUNK_SIZE,
-        "release_cuda_cache_after_batch": True,
-        "vm_memory_fractions": {
-            "output": VM_OUTPUT_MEMORY_FRACTION,
-            "working": VM_WORKING_MEMORY_FRACTION,
-            "total": VM_TOTAL_MEMORY_FRACTION,
-        },
-        "storage_schedule": {
-            "fast_checkpoint_seconds": FAST_CHECKPOINT_SECONDS,
-            "candidate_snapshot_seconds": CANDIDATE_SNAPSHOT_SECONDS,
-            "candidate_snapshot_on_stop": args.candidate_snapshot_on_stop,
-        },
+        "runtime": runtime,
     }
 
     _seed_everything(args.seed)
@@ -201,10 +233,12 @@ def main() -> None:
     )
     sampler = TensorFormulaSampler(device=device, policy_vocab=policy_vocab)
     gpu_bytes = torch.cuda.get_device_properties(device).total_memory
+    vm_memory = runtime["vm_memory_fractions"]
+    assert isinstance(vm_memory, dict)
     vm = BatchTorchVM(
-        max_output_bytes=int(gpu_bytes * VM_OUTPUT_MEMORY_FRACTION),
-        max_working_bytes=int(gpu_bytes * VM_WORKING_MEMORY_FRACTION),
-        max_total_bytes=int(gpu_bytes * VM_TOTAL_MEMORY_FRACTION),
+        max_output_bytes=int(gpu_bytes * float(vm_memory["output"])),
+        max_working_bytes=int(gpu_bytes * float(vm_memory["working"])),
+        max_total_bytes=int(gpu_bytes * float(vm_memory["total"])),
     )
     torch.cuda.reset_peak_memory_stats(device)
 
@@ -217,15 +251,21 @@ def main() -> None:
         seed=args.seed,
         attempts=int(method_config["attempts"]),
         batch_size=int(method_config["batch_size"]),
-        cpu_worker_count=args.cpu_workers,
-        cpu_gpu_overlap=not args.disable_cpu_gpu_overlap,
+        cpu_worker_count=int(runtime["cpu_workers"]),
+        cpu_gpu_overlap=bool(runtime["cpu_gpu_overlap"]),
         training_invalid_reward=float(
             reinforce.get("training_invalid_reward", scorer_config.hard_invalid_reward)
         ),
         advantage_epsilon=float(reinforce["advantage_epsilon"]),
         entropy_coefficient=float(reinforce["entropy_coefficient"]),
         gradient_clip_norm=float(optimizer_config["gradient_clip_norm"]),
-        candidate_snapshot_on_stop=args.candidate_snapshot_on_stop,
+        scorer_batch_chunk_size=int(runtime["scorer_batch_chunk_size"]),
+        release_cuda_cache_after_batch=bool(
+            runtime["release_cuda_cache_after_batch"]
+        ),
+        checkpoint_seconds=float(runtime["fast_seconds"]),
+        candidate_snapshot_seconds=float(runtime["candidate_snapshot_seconds"]),
+        candidate_snapshot_on_stop=bool(runtime["candidate_snapshot_on_stop"]),
     )
     run_dir = args.out_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)

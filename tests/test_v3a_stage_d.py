@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import copy
 import hashlib
 import json
@@ -41,12 +42,13 @@ from alpha_etf.research_v3a.stage_d import (
     validate_stage_d_binding,
     validate_training_candidate_state,
 )
-from scripts.v3a import select_candidates, train_gpu
+from scripts.v3a import run_stage_d, select_candidates, train_gpu
 from tests.test_v3a_contract import _research_spec
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PILOT_PROTOCOL = ROOT / "configs/v3a_stage_d_gpu_pilot.json"
+FORMAL_PROTOCOL = ROOT / "configs/v3a_stage_d_formal_topn.json"
 
 
 class V3AStageDTests(unittest.TestCase):
@@ -111,6 +113,58 @@ class V3AStageDTests(unittest.TestCase):
         formal["protocol_id"] = stage_d_protocol_id(formal)
         with self.assertRaisesRegex(RuntimeError, "has not been approved"):
             validate_stage_d_protocol(formal)
+
+    def test_current_formal_protocol_freezes_runner_runtime(self) -> None:
+        protocol = load_stage_d_protocol(FORMAL_PROTOCOL)
+        runtime = run_stage_d._resolve_runtime(
+            protocol,
+            argparse.Namespace(
+                cpu_workers=None,
+                disable_cpu_gpu_overlap=False,
+                candidate_snapshot_on_stop=False,
+            ),
+        )
+        self.assertEqual(runtime["cpu_workers"], 8)
+        self.assertTrue(runtime["cpu_gpu_overlap"])
+        self.assertEqual(runtime["scorer_batch_chunk_size"], 4096)
+        self.assertTrue(runtime["release_cuda_cache_after_batch"])
+        self.assertEqual(runtime["fast_seconds"], 1800)
+        self.assertEqual(runtime["candidate_snapshot_seconds"], 7200)
+        self.assertTrue(runtime["candidate_snapshot_on_stop"])
+        for method in ("transformer", "matched_random"):
+            for seed in (101, 102, 103):
+                config = method_run_config(protocol, method=method, seed=seed)
+                self.assertEqual(config["attempts"], 8_000_000)
+                self.assertEqual(config["batch_size"], 8192)
+
+        with self.assertRaisesRegex(RuntimeError, "worker override"):
+            run_stage_d._resolve_runtime(
+                protocol,
+                argparse.Namespace(
+                    cpu_workers=4,
+                    disable_cpu_gpu_overlap=False,
+                    candidate_snapshot_on_stop=False,
+                ),
+            )
+        with self.assertRaisesRegex(RuntimeError, "overlap override"):
+            run_stage_d._resolve_runtime(
+                protocol,
+                argparse.Namespace(
+                    cpu_workers=None,
+                    disable_cpu_gpu_overlap=True,
+                    candidate_snapshot_on_stop=False,
+                ),
+            )
+        run_args = argparse.Namespace(
+            method="transformer", seed=101, run_id=None
+        )
+        self.assertEqual(
+            run_stage_d._resolve_run_id(protocol, run_args),
+            "v3a-stage-d-formal-transformer-s101-02cca48d1c85",
+        )
+        run_args.run_id = "different"
+        with self.assertRaisesRegex(RuntimeError, "run ID override"):
+            run_stage_d._resolve_run_id(protocol, run_args)
 
     def test_quality_invalid_formula_receives_hard_invalid_reward(self) -> None:
         effective = effective_training_rewards(
