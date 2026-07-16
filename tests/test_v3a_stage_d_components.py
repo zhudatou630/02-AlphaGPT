@@ -26,6 +26,7 @@ from alpha_etf.research_v3a.attempts import (
 from alpha_etf.research_v3a.candidate_index import CompactCandidateIndex
 from alpha_etf.research_v3a.candidates import CandidateConfig
 from alpha_etf.research_v3a.factors import FACTOR_NAMES
+from alpha_etf.research_v3a.factors import rolling_mean_torch
 from alpha_etf.research_v3a.gpu_sampling import (
     TensorFormulaSampler,
     build_tensor_grammar_tables,
@@ -62,6 +63,23 @@ from alpha_etf.research_v3a.torch_vm import BatchTorchVM
 
 
 class V3AStageDComponentTests(unittest.TestCase):
+    def test_rolling_mean_row_chunk_preserves_direct_result(self) -> None:
+        generator = torch.Generator().manual_seed(5)
+        values = torch.randn((513, 2, 20), generator=generator)
+        values[::17, :, 3] = torch.nan
+        window = 5
+        windows = values.unfold(-1, window, 1)
+        finite = torch.isfinite(windows)
+        valid = finite.all(dim=-1)
+        cleaned = torch.where(finite, windows, torch.zeros_like(windows))
+        mean = cleaned.mean(dim=-1)
+        expected = torch.full_like(values, float("nan"))
+        expected[..., window - 1 :] = torch.where(
+            valid, mean, torch.full_like(mean, float("nan"))
+        )
+        actual = rolling_mean_torch(values, window)
+        torch.testing.assert_close(actual, expected, rtol=0.0, atol=0.0, equal_nan=True)
+
     def test_tensor_grammar_and_vm_codes_match_reference(self) -> None:
         device = torch.device("cpu")
         policy_vocab = PolicyVocab()

@@ -210,11 +210,18 @@ def rolling_mean_torch(values: torch.Tensor, window: int) -> torch.Tensor:
     out = torch.full_like(values, float("nan"))
     if window > values.shape[-1]:
         return out
-    windows = values.unfold(-1, window, 1)
-    valid = torch.isfinite(windows).all(dim=-1)
-    cleaned = torch.where(torch.isfinite(windows), windows, torch.zeros_like(windows))
-    mean = cleaned.mean(dim=-1)
-    out[..., window - 1 :] = torch.where(valid, mean, torch.full_like(mean, float("nan")))
+    row_chunk = 512 if values.ndim >= 3 else values.shape[0]
+    for start in range(0, values.shape[0], row_chunk):
+        stop = min(start + row_chunk, values.shape[0])
+        part = values[start:stop]
+        windows = part.unfold(-1, window, 1)
+        finite = torch.isfinite(windows)
+        valid = finite.all(dim=-1)
+        cleaned = torch.where(finite, windows, torch.zeros_like(windows))
+        mean = cleaned.mean(dim=-1)
+        out[start:stop, ..., window - 1 :] = torch.where(
+            valid, mean, torch.full_like(mean, float("nan"))
+        )
     return out
 
 
