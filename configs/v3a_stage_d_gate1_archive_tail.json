@@ -1,0 +1,119 @@
+{
+  "schema_version": "etf-v3a-stage-d-protocol-v1",
+  "protocol_id": "9f9cfbe379a7201fdc6156d3b6f866156d788fc54c6bce0c84dce4d4dbf0a3ca",
+  "name": "v3a-stage-d-gate1-archive-tail-20260716",
+  "mode": "mechanism",
+  "formal_budget_approved": false,
+  "prerequisite": {
+    "stage_c_run_id": "v3a-stage-c-20260711-01",
+    "stage_c_report_sha256": "3d742928cbae05c30acb8fef01eac27dfb458f058ca216ec3b2a8c48bc2947a4",
+    "dataset_id": "etf-v3a-dbdc6d0b7741",
+    "panel_sha256": "fce56f8b3aa5bfc13f7848c47eff5d1f3b449a379c048e25262c7f560494a85f"
+  },
+  "execution": {
+    "device": "cuda",
+    "gpu_class": "rtx_pro_6000",
+    "local_research_training_forbidden": true
+  },
+  "split": {
+    "name": "train",
+    "start": "2016-08-09",
+    "end": "2021-12-31",
+    "validation_metrics_read": false,
+    "final_metrics_read": false
+  },
+  "runs": {
+    "transformer": {
+      "seeds": [101, 102, 103],
+      "attempts": 2000000
+    },
+    "matched_random": {
+      "seeds": [],
+      "attempts": null
+    }
+  },
+  "batch_size": 8192,
+  "model": {
+    "d_model": 64,
+    "num_layers": 2,
+    "num_heads": 4,
+    "ff_dim": 128,
+    "dropout": 0.0,
+    "use_critic_head": false
+  },
+  "optimizer": {
+    "name": "AdamW",
+    "learning_rate": 0.001,
+    "weight_decay": 0.00001,
+    "gradient_clip_norm": 1.0
+  },
+  "reinforce": {
+    "objective": "etf-v3a-archive-tail-v1",
+    "elite_fraction": 0.1,
+    "archive_size": 50,
+    "model_fraction_numerator": 3,
+    "model_fraction_denominator": 4,
+    "lane_order": ["transformer", "matched_random"],
+    "random_lane_updates_model": false,
+    "group_weights": {
+      "elite": 1.0,
+      "archive": 1.0,
+      "waste": 1.0
+    },
+    "ordinary_new_weight": 0.0,
+    "entropy_coefficient": 0.0,
+    "sequence_log_prob": "sum_including_eos",
+    "archive_scope": "transformer_only",
+    "archive_update": "batch_end_from_batch_start_floor",
+    "archive_improvement_weight": "reward_margin_normalized_within_group",
+    "waste_members": ["history_canonical_duplicate", "within_batch_canonical_duplicate", "semantic_invalid"]
+  },
+  "checkpoint": {
+    "fast_seconds": 1800,
+    "candidate_snapshot_seconds": 7200,
+    "candidate_snapshot_on_stop": true
+  },
+  "runtime": {
+    "cpu_workers": 8,
+    "cpu_gpu_overlap": true,
+    "scorer_batch_chunk_size": 4096,
+    "release_cuda_cache_after_batch": true,
+    "vm_memory_fractions": {
+      "output": 0.25,
+      "working": 0.25,
+      "total": 0.5
+    }
+  },
+  "engineering_gate": {
+    "batches": 50,
+    "max_canonical_label_wait_fraction": 0.25,
+    "max_teacher_forcing_fraction": 0.2,
+    "min_attempts_per_second": 3000.0,
+    "min_cuda_free_bytes": 5368709120
+  },
+  "candidate_output": {
+    "apply_full_funnel": false,
+    "required_selected_count": 0,
+    "research_conclusion_allowed": true,
+    "interpretation": "training_mechanism_only"
+  },
+  "formula_library": {
+    "raw_top_sizes": [30, 50],
+    "curated_top_sizes": [30, 50],
+    "curation_rule_version": "etf-v3a-display-simplifier-v1",
+    "reward_tolerance": 0.000005,
+    "raw_preserved": true
+  },
+  "comparison": {
+    "old_transformer_and_random_source": "frozen_formal_02cca48d_prefix_2000000",
+    "seeds": [101, 102, 103],
+    "early_attempt_range": [0, 500000],
+    "late_attempt_range": [1500000, 2000000],
+    "acceptance": {
+      "late_to_early_new_canonical_ratio": "mean_at_least_0.5_and_at_least_2_of_3_seeds_at_least_0.5",
+      "new_formula_top10_reward": "late_minus_early_mean_positive_and_at_least_2_of_3_positive",
+      "transformer_archive_top50": "attempt_2000000_minus_attempt_1000000_mean_positive_and_at_least_2_of_3_positive",
+      "same_canonical_unique_vs_random": "paired_mean_positive_and_wins_at_least_2_of_3"
+    }
+  }
+}

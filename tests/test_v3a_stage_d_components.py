@@ -11,6 +11,10 @@ import numpy as np
 import torch
 
 from alpha_etf.gpt.policy import TransformerFormulaPolicy, TransformerPolicyConfig
+from alpha_etf.research_v3a.archive_tail import (
+    ARCHIVE_TAIL_OBJECTIVE_VERSION,
+    ArchiveTailConfig,
+)
 from alpha_etf.research_v3a.attempts import (
     ATTEMPT_DTYPE,
     AttemptLedger,
@@ -336,6 +340,7 @@ class V3AStageDComponentTests(unittest.TestCase):
             cpu_workers: int = 1,
             cpu_gpu_overlap: bool = False,
             snapshot_on_stop: bool = False,
+            archive_tail: bool = False,
         ) -> SerialStageDRunner:
             random.seed(seed)
             np.random.seed(seed)
@@ -362,17 +367,27 @@ class V3AStageDComponentTests(unittest.TestCase):
                 run_identity={"fixture": "serial-v2", "method": method, "seed": seed},
                 method=method,
                 seed=seed,
-                attempts=12,
-                batch_size=4,
+                attempts=16 if archive_tail else 12,
+                batch_size=8 if archive_tail else 4,
                 cpu_worker_count=cpu_workers,
                 cpu_gpu_overlap=cpu_gpu_overlap,
                 training_invalid_reward=-0.01,
                 advantage_epsilon=1e-5,
-                entropy_coefficient=0.005,
+                entropy_coefficient=0.0 if archive_tail else 0.005,
                 gradient_clip_norm=1.0,
                 candidate_snapshot_on_stop=snapshot_on_stop,
                 checkpoint_seconds=10_000,
                 candidate_snapshot_seconds=10_000,
+                learning_objective=(
+                    ARCHIVE_TAIL_OBJECTIVE_VERSION
+                    if archive_tail
+                    else "legacy_reinforce"
+                ),
+                archive_tail_config=(
+                    ArchiveTailConfig(elite_fraction=0.5, archive_size=2)
+                    if archive_tail
+                    else None
+                ),
             )
             return SerialStageDRunner(
                 config=config,
@@ -488,6 +503,96 @@ class V3AStageDComponentTests(unittest.TestCase):
             self.assertEqual(random_summary["method"], "matched_random")
             self.assertEqual(random_summary["attempt_count"], 12)
             self.assertTrue((random_dir / "training_complete.json").exists())
+
+            mechanism_continuous_dir = root / "mechanism-continuous"
+            mechanism_resumed_dir = root / "mechanism-resumed"
+            mechanism_continuous = build_runner(
+                mechanism_continuous_dir,
+                method="transformer",
+                seed=29,
+                archive_tail=True,
+            )
+            mechanism_continuous.run()
+            mechanism_partial = build_runner(
+                mechanism_resumed_dir,
+                method="transformer",
+                seed=29,
+                archive_tail=True,
+            )
+            mechanism_partial.run(stop_after=8)
+            mechanism_resumed = build_runner(
+                mechanism_resumed_dir,
+                method="transformer",
+                seed=29,
+                archive_tail=True,
+            )
+            mechanism_summary = mechanism_resumed.run(resume=True)
+            self.assertEqual(
+                (mechanism_continuous_dir / "attempts.bin").read_bytes(),
+                (mechanism_resumed_dir / "attempts.bin").read_bytes(),
+            )
+            mechanism_continuous_checkpoint = torch.load(
+                mechanism_continuous_dir / "checkpoint_final.pt",
+                map_location="cpu",
+                weights_only=False,
+            )
+            mechanism_resumed_checkpoint = torch.load(
+                mechanism_resumed_dir / "checkpoint_final.pt",
+                map_location="cpu",
+                weights_only=False,
+            )
+            for name, value in mechanism_continuous_checkpoint[
+                "model_state_dict"
+            ].items():
+                self.assertTrue(
+                    torch.equal(
+                        value,
+                        mechanism_resumed_checkpoint["model_state_dict"][name],
+                    )
+                )
+            self.assertEqual(
+                mechanism_continuous_checkpoint["optimizer_state_dict"].keys(),
+                mechanism_resumed_checkpoint["optimizer_state_dict"].keys(),
+            )
+            for parameter_id, continuous_state in mechanism_continuous_checkpoint[
+                "optimizer_state_dict"
+            ]["state"].items():
+                resumed_state = mechanism_resumed_checkpoint["optimizer_state_dict"][
+                    "state"
+                ][parameter_id]
+                for key, value in continuous_state.items():
+                    if isinstance(value, torch.Tensor):
+                        self.assertTrue(torch.equal(value, resumed_state[key]))
+                    else:
+                        self.assertEqual(value, resumed_state[key])
+            mechanism_records = np.concatenate(
+                list(read_attempt_batches(mechanism_resumed_dir / "attempts.bin"))
+            )
+            for start in (0, 8):
+                self.assertTrue(
+                    np.all(mechanism_records["training_reward"][start + 6 : start + 8] == 0)
+                )
+            mechanism_logs = [
+                json.loads(line)
+                for line in (mechanism_resumed_dir / "training_log.jsonl")
+                .read_text()
+                .splitlines()
+            ]
+            self.assertTrue(
+                all(
+                    row["learning_objective"] == ARCHIVE_TAIL_OBJECTIVE_VERSION
+                    and row["model_lane_count"] == 6
+                    and row["random_lane_count"] == 2
+                    for row in mechanism_logs
+                )
+            )
+            self.assertEqual(mechanism_summary["archive_tail"]["model_attempt_count"], 12)
+            continuous_summary = json.loads(
+                (mechanism_continuous_dir / "training_summary.json").read_text()
+            )
+            self.assertEqual(
+                continuous_summary["archive_tail"], mechanism_summary["archive_tail"]
+            )
 
 
 if __name__ == "__main__":

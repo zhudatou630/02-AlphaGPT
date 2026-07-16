@@ -96,7 +96,7 @@ class TransformerFormulaPolicy(nn.Module):
         self.head_actor = nn.Linear(config.d_model, config.model_vocab_size)
         self.head_critic = nn.Linear(config.d_model, 1) if config.use_critic_head else None
 
-    def forward(self, idx: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor | None]:
+    def _forward_hidden(self, idx: torch.Tensor) -> torch.Tensor:
         if idx.ndim != 2:
             raise ValueError(f"idx must have shape [batch, seq], got {tuple(idx.shape)}")
         _, seq_len = idx.shape
@@ -110,7 +110,15 @@ class TransformerFormulaPolicy(nn.Module):
                 x = block(x, mask)
         else:
             x = self.blocks(x, mask=mask, is_causal=True)
-        x = self.ln_f(x)
+        return self.ln_f(x)
+
+    def forward_all(self, idx: torch.Tensor) -> torch.Tensor:
+        """Return next-token actor logits for every input position."""
+
+        return self.head_actor(self._forward_hidden(idx))
+
+    def forward(self, idx: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor | None]:
+        x = self._forward_hidden(idx)
         last = x[:, -1, :]
         logits = self.head_actor(last)
         value = self.head_critic(last).squeeze(-1) if self.head_critic is not None else None

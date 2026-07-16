@@ -20,6 +20,10 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
 from alpha_etf.gpt.policy import TransformerFormulaPolicy, TransformerPolicyConfig
+from alpha_etf.research_v3a.archive_tail import (
+    ARCHIVE_TAIL_OBJECTIVE_VERSION,
+    ArchiveTailConfig,
+)
 from alpha_etf.research_v3a.candidates import CandidateConfig
 from alpha_etf.research_v3a.gpu_sampling import TensorFormulaSampler
 from alpha_etf.research_v3a.sampling import PolicyVocab, SamplingConfig
@@ -80,18 +84,18 @@ def parse_args() -> argparse.Namespace:
 def _resolve_runtime(
     protocol: dict[str, object], args: argparse.Namespace
 ) -> dict[str, object]:
-    if protocol["mode"] == "formal":
+    if protocol["mode"] in {"formal", "mechanism"}:
         runtime = dict(protocol["runtime"])
         checkpoint = dict(protocol["checkpoint"])
         expected_workers = int(runtime["cpu_workers"])
         expected_overlap = bool(runtime["cpu_gpu_overlap"])
         expected_snapshot_on_stop = bool(checkpoint["candidate_snapshot_on_stop"])
         if args.cpu_workers is not None and args.cpu_workers != expected_workers:
-            raise RuntimeError("Formal Stage D CPU worker override differs from protocol")
+            raise RuntimeError("Frozen Stage D CPU worker override differs from protocol")
         if args.disable_cpu_gpu_overlap and expected_overlap:
-            raise RuntimeError("Formal Stage D overlap override differs from protocol")
+            raise RuntimeError("Frozen Stage D overlap override differs from protocol")
         if args.candidate_snapshot_on_stop and not expected_snapshot_on_stop:
-            raise RuntimeError("Formal Stage D snapshot override differs from protocol")
+            raise RuntimeError("Frozen Stage D snapshot override differs from protocol")
         return {
             **runtime,
             **checkpoint,
@@ -117,8 +121,11 @@ def _resolve_run_id(protocol: dict[str, object], args: argparse.Namespace) -> st
         f"v3a-stage-d-{protocol['mode']}-{args.method}-s{args.seed}-"
         f"{str(protocol['protocol_id'])[:12]}"
     )
-    if protocol["mode"] == "formal" and args.run_id not in (None, expected):
-        raise RuntimeError("Formal Stage D run ID override differs from protocol")
+    if protocol["mode"] in {"formal", "mechanism"} and args.run_id not in (
+        None,
+        expected,
+    ):
+        raise RuntimeError("Frozen Stage D run ID override differs from protocol")
     return args.run_id or expected
 
 
@@ -244,6 +251,17 @@ def main() -> None:
 
     reinforce = protocol["reinforce"]
     optimizer_config = protocol["optimizer"]
+    learning_objective = str(reinforce.get("objective", "legacy_reinforce"))
+    archive_tail_config = (
+        ArchiveTailConfig(
+            elite_fraction=float(reinforce["elite_fraction"]),
+            archive_size=int(reinforce["archive_size"]),
+            model_fraction_numerator=int(reinforce["model_fraction_numerator"]),
+            model_fraction_denominator=int(reinforce["model_fraction_denominator"]),
+        )
+        if learning_objective == ARCHIVE_TAIL_OBJECTIVE_VERSION
+        else None
+    )
     serial_config = SerialStageDConfig(
         run_id=run_id,
         run_identity=run_identity,
@@ -256,7 +274,7 @@ def main() -> None:
         training_invalid_reward=float(
             reinforce.get("training_invalid_reward", scorer_config.hard_invalid_reward)
         ),
-        advantage_epsilon=float(reinforce["advantage_epsilon"]),
+        advantage_epsilon=float(reinforce.get("advantage_epsilon", 1e-5)),
         entropy_coefficient=float(reinforce["entropy_coefficient"]),
         gradient_clip_norm=float(optimizer_config["gradient_clip_norm"]),
         scorer_batch_chunk_size=int(runtime["scorer_batch_chunk_size"]),
@@ -266,6 +284,8 @@ def main() -> None:
         checkpoint_seconds=float(runtime["fast_seconds"]),
         candidate_snapshot_seconds=float(runtime["candidate_snapshot_seconds"]),
         candidate_snapshot_on_stop=bool(runtime["candidate_snapshot_on_stop"]),
+        learning_objective=learning_objective,
+        archive_tail_config=archive_tail_config,
     )
     run_dir = args.out_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)

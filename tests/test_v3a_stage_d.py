@@ -49,6 +49,7 @@ from tests.test_v3a_contract import _research_spec
 ROOT = Path(__file__).resolve().parents[1]
 PILOT_PROTOCOL = ROOT / "configs/v3a_stage_d_gpu_pilot.json"
 FORMAL_PROTOCOL = ROOT / "configs/v3a_stage_d_formal_topn.json"
+MECHANISM_PROTOCOL = ROOT / "configs/v3a_stage_d_gate1_archive_tail.json"
 
 
 class V3AStageDTests(unittest.TestCase):
@@ -136,6 +137,57 @@ class V3AStageDTests(unittest.TestCase):
                 config = method_run_config(protocol, method=method, seed=seed)
                 self.assertEqual(config["attempts"], 8_000_000)
                 self.assertEqual(config["batch_size"], 8192)
+        with self.assertRaisesRegex(RuntimeError, "worker override"):
+            run_stage_d._resolve_runtime(
+                protocol,
+                argparse.Namespace(
+                    cpu_workers=4,
+                    disable_cpu_gpu_overlap=False,
+                    candidate_snapshot_on_stop=False,
+                ),
+            )
+        with self.assertRaisesRegex(RuntimeError, "overlap override"):
+            run_stage_d._resolve_runtime(
+                protocol,
+                argparse.Namespace(
+                    cpu_workers=None,
+                    disable_cpu_gpu_overlap=True,
+                    candidate_snapshot_on_stop=False,
+                ),
+            )
+        run_args = argparse.Namespace(method="transformer", seed=101, run_id=None)
+        self.assertEqual(
+            run_stage_d._resolve_run_id(protocol, run_args),
+            "v3a-stage-d-formal-transformer-s101-02cca48d1c85",
+        )
+        run_args.run_id = "different"
+        with self.assertRaisesRegex(RuntimeError, "run ID override"):
+            run_stage_d._resolve_run_id(protocol, run_args)
+
+    def test_gate1_mechanism_protocol_is_exact_and_not_formal(self) -> None:
+        protocol = load_stage_d_protocol(MECHANISM_PROTOCOL)
+        self.assertEqual(protocol["mode"], "mechanism")
+        self.assertFalse(protocol["formal_budget_approved"])
+        self.assertEqual(
+            method_run_config(protocol, method="transformer", seed=101)["attempts"],
+            2_000_000,
+        )
+        with self.assertRaises(RuntimeError):
+            method_run_config(protocol, method="matched_random", seed=101)
+        runtime = run_stage_d._resolve_runtime(
+            protocol,
+            argparse.Namespace(
+                cpu_workers=None,
+                disable_cpu_gpu_overlap=False,
+                candidate_snapshot_on_stop=False,
+            ),
+        )
+        self.assertEqual(runtime["cpu_workers"], 8)
+        changed = copy.deepcopy(protocol)
+        changed["reinforce"]["elite_fraction"] = 0.2
+        changed["protocol_id"] = stage_d_protocol_id(changed)
+        with self.assertRaisesRegex(RuntimeError, "not approved by code"):
+            validate_stage_d_protocol(changed)
 
         with self.assertRaisesRegex(RuntimeError, "worker override"):
             run_stage_d._resolve_runtime(
@@ -160,7 +212,7 @@ class V3AStageDTests(unittest.TestCase):
         )
         self.assertEqual(
             run_stage_d._resolve_run_id(protocol, run_args),
-            "v3a-stage-d-formal-transformer-s101-02cca48d1c85",
+            "v3a-stage-d-mechanism-transformer-s101-9f9cfbe379a7",
         )
         run_args.run_id = "different"
         with self.assertRaisesRegex(RuntimeError, "run ID override"):

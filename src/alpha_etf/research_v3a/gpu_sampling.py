@@ -137,6 +137,86 @@ class TensorFormulaSampler:
     def sample_uniform(self, batch_size: int) -> FormulaTensorBatch:
         return self._sample(model=None, batch_size=batch_size)
 
+    def score_policy_sequences(
+        self,
+        model: torch.nn.Module,
+        token_ids: torch.Tensor,
+        token_lengths: torch.Tensor,
+    ) -> torch.Tensor:
+        """Recompute complete sequence log-probabilities in one teacher-forced pass."""
+
+        tokens = torch.as_tensor(token_ids, dtype=torch.long, device=self.device)
+        lengths = torch.as_tensor(token_lengths, dtype=torch.long, device=self.device)
+        if tokens.ndim != 2 or tokens.shape[1] != self.config.max_len:
+            raise ValueError("Stage D teacher-forcing tokens have the wrong shape")
+        if lengths.shape != (tokens.shape[0],):
+            raise ValueError("Stage D teacher-forcing lengths have the wrong shape")
+        if torch.any((lengths < 1) | (lengths > self.config.max_len)):
+            raise ValueError("Stage D teacher-forcing lengths are outside the grammar")
+        forward_all = getattr(model, "forward_all", None)
+        if forward_all is None:
+            raise TypeError("Stage D policy lacks the forward_all teacher-forcing API")
+
+        batch_size = int(tokens.shape[0])
+        max_decisions = self.config.max_len + 1
+        vocab = self.policy_vocab
+        inputs = torch.full(
+            (batch_size, max_decisions),
+            vocab.pad_id,
+            dtype=torch.long,
+            device=self.device,
+        )
+        targets = torch.full_like(inputs, vocab.pad_id)
+        active = torch.arange(max_decisions, device=self.device).unsqueeze(0) <= lengths.unsqueeze(1)
+        inputs[:, 0] = vocab.bos_id
+        for position in range(self.config.max_len):
+            formula_rows = lengths > position
+            actions = tokens[formula_rows, position] + vocab.formula_offset
+            targets[formula_rows, position] = actions
+            inputs[formula_rows, position + 1] = actions
+        targets[torch.arange(batch_size, device=self.device), lengths] = vocab.eos_id
+
+        logits = forward_all(inputs)
+        if logits.shape != (batch_size, max_decisions, vocab.size):
+            raise RuntimeError("Stage D teacher-forcing logits have the wrong shape")
+
+        state_ids = torch.full(
+            (batch_size,),
+            self.tables.initial_state_id,
+            dtype=torch.long,
+            device=self.device,
+        )
+        replay_lengths = torch.zeros(batch_size, dtype=torch.long, device=self.device)
+        log_prob_sums = torch.zeros(batch_size, dtype=torch.float32, device=self.device)
+        for position in range(max_decisions):
+            position_active = active[:, position]
+            legal = self.tables.legal_actions[
+                replay_lengths.clamp_max(self.config.max_len), state_ids
+            ]
+            actions = torch.where(
+                position_active,
+                targets[:, position],
+                torch.full_like(targets[:, position], vocab.eos_id),
+            )
+            if not bool(legal[position_active, actions[position_active]].all().item()):
+                raise RuntimeError("Stage D teacher-forcing sequence violates the grammar")
+            masked_logits = logits[:, position].masked_fill(~legal, -torch.inf)
+            selected = torch.log_softmax(masked_logits, dim=1).gather(
+                1, actions.unsqueeze(1)
+            ).squeeze(1)
+            log_prob_sums = log_prob_sums + torch.where(
+                position_active, selected, torch.zeros_like(selected)
+            )
+            formula_rows = torch.where(position_active & (position < lengths))[0]
+            if formula_rows.numel():
+                formula_ids = tokens[formula_rows, position]
+                previous_states = state_ids[formula_rows]
+                state_ids[formula_rows] = self.tables.next_states[
+                    previous_states, formula_ids
+                ]
+                replay_lengths[formula_rows] += 1
+        return log_prob_sums
+
     def _sample(
         self, *, model: torch.nn.Module | None, batch_size: int
     ) -> FormulaTensorBatch:

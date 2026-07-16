@@ -15,6 +15,12 @@ from typing import Any
 import numpy as np
 import torch
 
+from alpha_etf.research_v3a.archive_tail import (
+    ARCHIVE_TAIL_OBJECTIVE_VERSION,
+    ArchiveTailConfig,
+    ArchiveTailState,
+    archive_tail_objective,
+)
 from alpha_etf.research_v3a.attempts import (
     AttemptLedger,
     AttemptStatus,
@@ -53,7 +59,7 @@ from alpha_etf.research_v3a.torch_scoring import (
 from alpha_etf.research_v3a.torch_vm import BatchTorchVM
 
 
-SERIAL_RUNNER_SCHEMA_VERSION = "etf-v3a-stage-d-serial-runner-v3"
+SERIAL_RUNNER_SCHEMA_VERSION = "etf-v3a-stage-d-serial-runner-v4"
 TRAINING_SUMMARY_SCHEMA_VERSION = "etf-v3a-stage-d-training-summary-v2"
 TRAINING_COMPLETE_SCHEMA_VERSION = "etf-v3a-stage-d-training-complete-v2"
 FAST_CHECKPOINT_SECONDS = 30 * 60
@@ -80,6 +86,8 @@ class SerialStageDConfig:
     checkpoint_seconds: float = FAST_CHECKPOINT_SECONDS
     candidate_snapshot_seconds: float = CANDIDATE_SNAPSHOT_SECONDS
     candidate_snapshot_on_stop: bool = False
+    learning_objective: str = "legacy_reinforce"
+    archive_tail_config: ArchiveTailConfig | None = None
 
     def __post_init__(self) -> None:
         if self.method not in {"transformer", "matched_random"}:
@@ -94,6 +102,22 @@ class SerialStageDConfig:
             raise ValueError("Stage D Transformer cannot end with a one-formula batch")
         if self.checkpoint_seconds <= 0 or self.candidate_snapshot_seconds <= 0:
             raise ValueError("Stage D checkpoint intervals must be positive")
+        if self.learning_objective not in {
+            "legacy_reinforce",
+            ARCHIVE_TAIL_OBJECTIVE_VERSION,
+        }:
+            raise ValueError("Unsupported Stage D learning objective")
+        if self.learning_objective == ARCHIVE_TAIL_OBJECTIVE_VERSION:
+            if self.method != "transformer" or self.archive_tail_config is None:
+                raise ValueError("Archive-tail learning requires Transformer configuration")
+            if self.entropy_coefficient != 0.0:
+                raise ValueError("Archive-tail learning requires zero entropy coefficient")
+            if self.batch_size % self.archive_tail_config.model_fraction_denominator:
+                raise ValueError("Archive-tail batch size must preserve its lane ratio")
+            if self.attempts % self.archive_tail_config.model_fraction_denominator:
+                raise ValueError("Archive-tail attempts must preserve its lane ratio")
+        elif self.archive_tail_config is not None:
+            raise ValueError("Legacy Stage D cannot receive archive-tail configuration")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -109,7 +133,16 @@ class _PendingBatch:
     prepare_started: float
     gpu_seconds: float
     batch_started: float
-    training_metrics: dict[str, float | None]
+    training_metrics: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class _LaneBatch:
+    arguments: dict[str, np.ndarray | int]
+    gpu_seconds: float
+    entropy: float
+    normalized_entropy: float
+    average_allowed_actions: float
 
 
 class _BatchLog:
@@ -257,6 +290,7 @@ class SerialStageDRunner:
             ledger = state.pop("ledger_handle")
             batch_log = state.pop("log_handle")
             index = state.pop("candidate_index")
+            archive_tail_state = state.pop("archive_tail_state", None)
         else:
             ledger = AttemptLedger(self.ledger_path, create=True)
             batch_log = _BatchLog(self.log_path, create=True)
@@ -270,6 +304,11 @@ class SerialStageDRunner:
                 "elapsed_seconds": 0.0,
                 "resume_count": 0,
             }
+            archive_tail_state = (
+                ArchiveTailState(self.config.archive_tail_config)
+                if self.config.learning_objective == ARCHIVE_TAIL_OBJECTIVE_VERSION
+                else None
+            )
             self._save_candidate_snapshot(index, state)
             ledger.flush(durable=True)
             batch_log.flush(durable=True)
@@ -298,6 +337,7 @@ class SerialStageDRunner:
                     step=generated_step,
                     batch_count=batch_count,
                     preparer=preparer,
+                    archive_tail_state=archive_tail_state,
                 )
                 if self.device.type == "cuda" and self.config.release_cuda_cache_after_batch:
                     cache_started = time.perf_counter()
@@ -393,7 +433,7 @@ class SerialStageDRunner:
                 "attempt_count": completed,
                 "target_attempts": self.config.attempts,
             }
-        return self._finalize(index, state)
+        return self._finalize(index, state, archive_tail_state=archive_tail_state)
 
     def _produce_batch(
         self,
@@ -402,7 +442,18 @@ class SerialStageDRunner:
         step: int,
         batch_count: int,
         preparer: AttemptBatchPreparer,
+        archive_tail_state: ArchiveTailState | None,
     ) -> _PendingBatch:
+        if self.config.learning_objective == ARCHIVE_TAIL_OBJECTIVE_VERSION:
+            if archive_tail_state is None:
+                raise RuntimeError("Archive-tail runner lacks its learning state")
+            return self._produce_archive_tail_batch(
+                attempt_start=attempt_start,
+                step=step,
+                batch_count=batch_count,
+                preparer=preparer,
+                archive_tail_state=archive_tail_state,
+            )
         batch_started = time.perf_counter()
         gpu_started = time.perf_counter()
         if self.config.method == "transformer":
@@ -538,6 +589,218 @@ class SerialStageDRunner:
             training_metrics=training_metrics,
         )
 
+    def _evaluate_archive_tail_lane(
+        self,
+        *,
+        sample: Any,
+        attempt_start: int,
+        step: int,
+        gpu_started: float,
+    ) -> _LaneBatch:
+        vm_result = self.vm.execute(
+            sample.vm_codes,
+            sample.vm_lengths,
+            self.factors,
+            self.tradable_mask,
+            max_stack_depth=self.sampler.tables.max_vm_stack_depth,
+        )
+        scored = score_signal_batch_chunked(
+            vm_result.signal,
+            vm_result.valid,
+            self.targets,
+            self.scorer_config,
+            chunk_size=self.config.scorer_batch_chunk_size,
+        )
+        quality_valid, coverage, finite_std, variation_valid = (
+            signal_quality_batch_chunked(
+                vm_result.signal,
+                self.targets,
+                min_coverage=self.candidate_config.min_coverage,
+                constant_std_eps=self.candidate_config.constant_std_eps,
+                chunk_size=self.config.scorer_batch_chunk_size,
+            )
+        )
+        decision_counts = sample.token_lengths + 1
+        arguments: dict[str, np.ndarray | int] = {
+            "attempt_start": attempt_start,
+            "training_step": step,
+            "token_ids": sample.token_ids.detach().cpu().numpy(),
+            "token_lengths": sample.token_lengths.detach().cpu().numpy(),
+            "vm_valid": vm_result.valid.detach().cpu().numpy(),
+            "score_valid": scored.valid.detach().cpu().numpy(),
+            "quality_valid": quality_valid.detach().cpu().numpy(),
+            "variation_valid": variation_valid.detach().cpu().numpy(),
+            "rewards": scored.reward.detach().cpu().numpy(),
+            "training_rewards": np.zeros(
+                int(sample.token_ids.shape[0]), dtype=np.float32
+            ),
+            "coverage": coverage.detach().cpu().numpy(),
+            "finite_std": finite_std.detach().cpu().numpy(),
+            "selected_indices": scored.selected_indices.detach()
+            .to(torch.int16)
+            .cpu()
+            .numpy(),
+            "top_k": self._top_k_cpu,
+        }
+        return _LaneBatch(
+            arguments=arguments,
+            gpu_seconds=time.perf_counter() - gpu_started,
+            entropy=float(
+                (sample.entropy_sums / decision_counts).mean().detach().cpu().item()
+            ),
+            normalized_entropy=float(
+                (
+                    sample.normalized_entropy_sums
+                    / decision_counts.to(torch.float32)
+                )
+                .mean()
+                .detach()
+                .cpu()
+                .item()
+            ),
+            average_allowed_actions=float(
+                sample.average_allowed_actions.detach().cpu().item()
+            ),
+        )
+
+    def _produce_archive_tail_batch(
+        self,
+        *,
+        attempt_start: int,
+        step: int,
+        batch_count: int,
+        preparer: AttemptBatchPreparer,
+        archive_tail_state: ArchiveTailState,
+    ) -> _PendingBatch:
+        assert self.model is not None and self.optimizer is not None
+        learning = archive_tail_state.config
+        model_count = learning.model_count(batch_count)
+        random_count = batch_count - model_count
+        batch_started = time.perf_counter()
+        self.model.train()
+
+        model_gpu_started = time.perf_counter()
+        with torch.no_grad():
+            model_sample = self.sampler.sample_policy(self.model, model_count)
+            model_lane = self._evaluate_archive_tail_lane(
+                sample=model_sample,
+                attempt_start=attempt_start,
+                step=step,
+                gpu_started=model_gpu_started,
+            )
+        model_prepare_started = time.perf_counter()
+        model_submission = preparer.submit(**model_lane.arguments)
+
+        random_gpu_started = time.perf_counter()
+        with torch.no_grad():
+            random_sample = self.sampler.sample_uniform(random_count)
+            random_lane = self._evaluate_archive_tail_lane(
+                sample=random_sample,
+                attempt_start=attempt_start + model_count,
+                step=step,
+                gpu_started=random_gpu_started,
+            )
+        random_submission = preparer.submit(**random_lane.arguments)
+
+        label_wait_started = time.perf_counter()
+        model_prepared = model_submission.result()
+        canonical_label_wait_seconds = time.perf_counter() - label_wait_started
+        model_cpu_prepare_seconds = time.perf_counter() - model_prepare_started
+        labels = archive_tail_state.apply(model_prepared.records, prepared=True)
+        model_records = model_prepared.records.copy()
+        model_records["training_reward"] = labels.combined_weights
+        model_prepared = PreparedAttemptBatch(model_records)
+
+        teacher_started = time.perf_counter()
+        log_prob_sums = self.sampler.score_policy_sequences(
+            self.model,
+            torch.as_tensor(model_lane.arguments["token_ids"], device=self.device),
+            torch.as_tensor(model_lane.arguments["token_lengths"], device=self.device),
+        )
+        elite_weights = torch.as_tensor(
+            labels.elite_weights, dtype=log_prob_sums.dtype, device=self.device
+        )
+        archive_weights = torch.as_tensor(
+            labels.archive_weights, dtype=log_prob_sums.dtype, device=self.device
+        )
+        waste_weights = torch.as_tensor(
+            labels.waste_weights, dtype=log_prob_sums.dtype, device=self.device
+        )
+        objective = archive_tail_objective(
+            log_prob_sums=log_prob_sums,
+            elite_weights=elite_weights,
+            archive_weights=archive_weights,
+            waste_weights=waste_weights,
+        )
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        teacher_forcing_seconds = time.perf_counter() - teacher_started
+
+        backward_started = time.perf_counter()
+        self.optimizer.zero_grad(set_to_none=True)
+        objective.loss.backward()
+        norm = torch.nn.utils.clip_grad_norm_(
+            self.model.parameters(), self.config.gradient_clip_norm
+        )
+        if not bool(torch.isfinite(norm).item()):
+            raise RuntimeError("Stage D archive-tail gradient norm is non-finite")
+        gradient_norm = float(norm.detach().cpu().item())
+        self.optimizer.step()
+        backward_seconds = time.perf_counter() - backward_started
+
+        random_wait_started = time.perf_counter()
+        random_prepared = random_submission.result()
+        random_cpu_wait_seconds = time.perf_counter() - random_wait_started
+        prepared = PreparedAttemptBatch(
+            np.concatenate([model_prepared.records, random_prepared.records])
+        )
+        semantic_rewards = model_prepared.records["reward"][
+            np.isfinite(model_prepared.records["reward"])
+        ].astype(np.float64)
+        training_metrics: dict[str, Any] = {
+            "loss": float(objective.loss.detach().cpu().item()),
+            "elite_loss": float(objective.elite_loss.detach().cpu().item()),
+            "archive_loss": float(objective.archive_loss.detach().cpu().item()),
+            "waste_loss": float(objective.waste_loss.detach().cpu().item()),
+            "reward_mean": (
+                float(semantic_rewards.mean()) if semantic_rewards.size else None
+            ),
+            "reward_std": (
+                float(semantic_rewards.std()) if semantic_rewards.size else None
+            ),
+            "entropy": model_lane.entropy,
+            "normalized_entropy": model_lane.normalized_entropy,
+            "average_allowed_actions": model_lane.average_allowed_actions,
+            "gradient_norm": gradient_norm,
+            "model_lane_count": model_count,
+            "random_lane_count": random_count,
+            "model_gpu_seconds": model_lane.gpu_seconds,
+            "random_gpu_seconds": random_lane.gpu_seconds,
+            "model_cpu_prepare_seconds": model_cpu_prepare_seconds,
+            "canonical_label_wait_seconds": canonical_label_wait_seconds,
+            "teacher_forcing_seconds": teacher_forcing_seconds,
+            "backward_seconds": backward_seconds,
+            "random_cpu_wait_seconds": random_cpu_wait_seconds,
+            "mechanism_critical_path_seconds": time.perf_counter() - batch_started,
+            **labels.metrics,
+        }
+        return _PendingBatch(
+            step=step,
+            attempt_start=attempt_start,
+            batch_count=batch_count,
+            submission=None,
+            prepared=prepared,
+            prepare_started=model_prepare_started,
+            gpu_seconds=(
+                model_lane.gpu_seconds
+                + random_lane.gpu_seconds
+                + teacher_forcing_seconds
+                + backward_seconds
+            ),
+            batch_started=batch_started,
+            training_metrics=training_metrics,
+        )
+
     def _commit_pending(
         self,
         pending: _PendingBatch,
@@ -593,6 +856,12 @@ class SerialStageDRunner:
             raise ValueError("Stage D stop-after is outside the run budget")
         if target != self.config.attempts and target % self.config.batch_size:
             raise ValueError("Stage D stop-after must be a complete batch boundary")
+        if (
+            self.config.learning_objective == ARCHIVE_TAIL_OBJECTIVE_VERSION
+            and self.config.archive_tail_config is not None
+            and target % self.config.archive_tail_config.model_fraction_denominator
+        ):
+            raise ValueError("Archive-tail stop target must preserve its lane ratio")
         return target
 
     def _resume(self) -> dict[str, Any]:
@@ -639,6 +908,15 @@ class SerialStageDRunner:
         restored = restore_training_checkpoint(
             checkpoint, model=self.model, optimizer=self.optimizer
         )
+        archive_tail_state = None
+        if self.config.learning_objective == ARCHIVE_TAIL_OBJECTIVE_VERSION:
+            assert self.config.archive_tail_config is not None
+            archive_tail_state = ArchiveTailState.restore_from_ledger(
+                ledger_path=self.ledger_path,
+                stop=int(checkpoint["attempt_count"]),
+                batch_size=self.config.batch_size,
+                config=self.config.archive_tail_config,
+            )
         return {
             "step": restored["step"],
             "attempt_count": restored["attempt_count"],
@@ -651,6 +929,7 @@ class SerialStageDRunner:
             "ledger_handle": ledger,
             "log_handle": log,
             "candidate_index": index,
+            "archive_tail_state": archive_tail_state,
         }
 
     def _save_checkpoint(
@@ -763,7 +1042,8 @@ class SerialStageDRunner:
         elapsed: float,
     ) -> dict[str, Any]:
         semantic_rewards = resolved["reward"][semantic]
-        return {
+        batch_latency_seconds = time.perf_counter() - pending.batch_started
+        payload = {
             "step": pending.step,
             "attempt_count": completed,
             "batch_count": pending.batch_count,
@@ -792,7 +1072,7 @@ class SerialStageDRunner:
             "cpu_prepare_seconds": cpu_prepare_seconds,
             "cpu_wait_seconds": cpu_wait_seconds,
             "commit_seconds": commit_seconds,
-            "batch_latency_seconds": time.perf_counter() - pending.batch_started,
+            "batch_latency_seconds": batch_latency_seconds,
             "pending_cpu_batches": pending_batches,
             "elapsed_seconds": elapsed,
             "attempts_per_second": completed / elapsed if elapsed > 0 else None,
@@ -810,6 +1090,53 @@ class SerialStageDRunner:
                 else None
             ),
         }
+        if self.config.learning_objective == ARCHIVE_TAIL_OBJECTIVE_VERSION:
+            mechanism_keys = (
+                "elite_loss",
+                "archive_loss",
+                "waste_loss",
+                "model_lane_count",
+                "random_lane_count",
+                "model_gpu_seconds",
+                "random_gpu_seconds",
+                "model_cpu_prepare_seconds",
+                "canonical_label_wait_seconds",
+                "teacher_forcing_seconds",
+                "backward_seconds",
+                "random_cpu_wait_seconds",
+                "mechanism_critical_path_seconds",
+                "model_attempt_count",
+                "history_duplicate_count",
+                "within_batch_duplicate_count",
+                "semantic_invalid_count",
+                "new_valid_count",
+                "elite_count",
+                "archive_improver_count",
+                "new_valid_reward_mean",
+                "new_valid_reward_q90",
+                "new_valid_top10_mean",
+                "archive_floor_before",
+                "archive_count",
+                "archive_mean_reward",
+                "archive_floor_after",
+            )
+            payload["learning_objective"] = self.config.learning_objective
+            for key in mechanism_keys:
+                payload[key] = pending.training_metrics[key]
+            critical = float(pending.training_metrics["mechanism_critical_path_seconds"])
+            payload["canonical_label_wait_fraction"] = (
+                float(pending.training_metrics["canonical_label_wait_seconds"])
+                / critical
+            )
+            payload["teacher_forcing_fraction"] = (
+                float(pending.training_metrics["teacher_forcing_seconds"])
+                / critical
+            )
+            if self.device.type == "cuda":
+                cuda_free, cuda_total = torch.cuda.mem_get_info(self.device)
+                payload["cuda_free_bytes"] = int(cuda_free)
+                payload["cuda_total_bytes"] = int(cuda_total)
+        return payload
 
     def _retained_candidates(self, index: CompactCandidateIndex) -> list[CandidateRecord]:
         records: list[CandidateRecord] = []
@@ -843,7 +1170,11 @@ class SerialStageDRunner:
         return sorted(records, key=lambda item: (-item.reward, item.token_len, item.formula_hash))
 
     def _finalize(
-        self, index: CompactCandidateIndex, state: dict[str, Any]
+        self,
+        index: CompactCandidateIndex,
+        state: dict[str, Any],
+        *,
+        archive_tail_state: ArchiveTailState | None = None,
     ) -> dict[str, Any]:
         retained = self._retained_candidates(index)
         retained_path = self.run_dir / "retained_candidates.json"
@@ -916,6 +1247,28 @@ class SerialStageDRunner:
             ),
             "validation_or_final_metrics_read": False,
         }
+        if archive_tail_state is not None:
+            archive_rewards = np.asarray(
+                [entry.reward for entry in archive_tail_state.archive.values()],
+                dtype=np.float64,
+            )
+            summary["archive_tail"] = {
+                "model_attempt_count": archive_tail_state.model_attempt_count,
+                "model_seen_canonical_count": len(archive_tail_state.seen),
+                "model_archive_count": len(archive_tail_state.archive),
+                "model_archive_mean_reward": (
+                    float(archive_rewards.mean()) if archive_rewards.size else None
+                ),
+                "model_archive_floor_reward": (
+                    float(archive_rewards.min())
+                    if archive_rewards.size == archive_tail_state.config.archive_size
+                    else None
+                ),
+                "config": archive_tail_state.config.to_dict(),
+                "standard_candidate_index_scope": "combined_transformer_and_random_lanes",
+                "separate_lane_libraries": "derived_by_gate1_read_only_analysis",
+            }
+            summary["learning_objective"] = self.config.learning_objective
         summary_path = self.run_dir / "training_summary.json"
         _write_json_atomic(summary_path, summary)
         marker = {

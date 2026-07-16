@@ -46,6 +46,9 @@ CURRENT_FORMAL_PROTOCOL_IDS = {
 APPROVED_FORMAL_PROTOCOL_IDS = (
     LEGACY_FORMAL_PROTOCOL_IDS | CURRENT_FORMAL_PROTOCOL_IDS
 )
+APPROVED_MECHANISM_PROTOCOL_IDS = {
+    "9f9cfbe379a7201fdc6156d3b6f866156d788fc54c6bce0c84dce4d4dbf0a3ca",
+}
 CURATED_FORMULA_LIBRARY_RULE_VERSION = "etf-v3a-display-simplifier-v1"
 CURATED_FORMULA_LIBRARY_REWARD_TOLERANCE = 5e-6
 STATUS_KEYS = (
@@ -357,6 +360,11 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
             raise RuntimeError("V3A Stage D formal protocol has not been approved")
         if protocol.get("formal_budget_approved") is not True:
             raise RuntimeError("V3A Stage D formal budget is not approved")
+    elif mode == "mechanism":
+        if actual_id not in APPROVED_MECHANISM_PROTOCOL_IDS:
+            raise RuntimeError("V3A Stage D mechanism protocol is not approved by code")
+        if protocol.get("formal_budget_approved") is not False:
+            raise RuntimeError("V3A Stage D mechanism cannot approve a formal budget")
     else:
         raise RuntimeError(f"Unsupported V3A Stage D protocol mode: {mode!r}")
 
@@ -375,7 +383,7 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
         "final_metrics_read": False,
     }:
         raise RuntimeError("V3A Stage D protocol split mismatch")
-    expected_batch = 8192 if mode == "formal" else 256
+    expected_batch = 8192 if mode in {"formal", "mechanism"} else 256
     if int(protocol.get("batch_size", -1)) != expected_batch:
         raise RuntimeError(
             f"V3A Stage D batch size must be {expected_batch} for {mode} mode"
@@ -425,6 +433,12 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
             or transformer["attempts"] != random_run["attempts"]
         ):
             raise RuntimeError("V3A Stage D formal methods must use matched seed counts and budgets")
+    elif mode == "mechanism":
+        if runs != {
+            "transformer": {"seeds": [101, 102, 103], "attempts": 2_000_000},
+            "matched_random": {"seeds": [], "attempts": None},
+        }:
+            raise RuntimeError("V3A Stage D mechanism budget differs from approval")
 
     model = protocol.get("model", {})
     if model != {
@@ -439,7 +453,7 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
     optimizer = protocol.get("optimizer", {})
     expected_optimizer = {
         "name": "AdamW",
-        "learning_rate": 1e-3 if mode == "formal" else 1e-4,
+        "learning_rate": 1e-3 if mode in {"formal", "mechanism"} else 1e-4,
         "weight_decay": 1e-5,
         "gradient_clip_norm": 1.0,
     }
@@ -465,6 +479,27 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
         "quality_invalid_uses_hard_invalid_reward": True,
         "training_invalid_reward": -0.01,
     }
+    expected_mechanism_reinforce = {
+        "objective": "etf-v3a-archive-tail-v1",
+        "elite_fraction": 0.1,
+        "archive_size": 50,
+        "model_fraction_numerator": 3,
+        "model_fraction_denominator": 4,
+        "lane_order": ["transformer", "matched_random"],
+        "random_lane_updates_model": False,
+        "group_weights": {"elite": 1.0, "archive": 1.0, "waste": 1.0},
+        "ordinary_new_weight": 0.0,
+        "entropy_coefficient": 0.0,
+        "sequence_log_prob": "sum_including_eos",
+        "archive_scope": "transformer_only",
+        "archive_update": "batch_end_from_batch_start_floor",
+        "archive_improvement_weight": "reward_margin_normalized_within_group",
+        "waste_members": [
+            "history_canonical_duplicate",
+            "within_batch_canonical_duplicate",
+            "semantic_invalid",
+        ],
+    }
     if mode == "formal":
         if reinforce not in (
             expected_legacy_reinforce,
@@ -472,6 +507,9 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
             expected_formal_reinforce,
         ):
             raise RuntimeError("V3A Stage D formal REINFORCE config mismatch")
+    elif mode == "mechanism":
+        if reinforce != expected_mechanism_reinforce:
+            raise RuntimeError("V3A Stage D mechanism objective config mismatch")
     else:
         expected_reinforce = (
             expected_legacy_reinforce
@@ -483,7 +521,7 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
         if reinforce != expected_reinforce:
             raise RuntimeError("V3A Stage D REINFORCE config mismatch")
     checkpoint = protocol.get("checkpoint", {})
-    if actual_id in CURRENT_FORMAL_PROTOCOL_IDS:
+    if actual_id in (CURRENT_FORMAL_PROTOCOL_IDS | APPROVED_MECHANISM_PROTOCOL_IDS):
         if checkpoint != formal_checkpoint_policy():
             raise RuntimeError("V3A Stage D formal checkpoint config mismatch")
         if protocol.get("runtime") != formal_runtime_policy():
@@ -511,6 +549,16 @@ def validate_stage_d_protocol(protocol: dict[str, Any]) -> None:
             raise RuntimeError("V3A Stage D formal candidate-output protocol mismatch")
         if candidate == expected_top_n_candidate and protocol.get("formula_library") != formal_formula_library_policy():
             raise RuntimeError("V3A Stage D formal formula-library policy mismatch")
+    elif mode == "mechanism":
+        if candidate != {
+            "apply_full_funnel": False,
+            "required_selected_count": 0,
+            "research_conclusion_allowed": True,
+            "interpretation": "training_mechanism_only",
+        }:
+            raise RuntimeError("V3A Stage D mechanism candidate-output mismatch")
+        if protocol.get("formula_library") != formal_formula_library_policy():
+            raise RuntimeError("V3A Stage D mechanism formula-library policy mismatch")
     else:
         expected_candidate = (
             expected_legacy_candidate
