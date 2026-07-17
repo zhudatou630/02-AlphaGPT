@@ -90,6 +90,20 @@ Gate 1已经证明后期新公式top10%的全训练期reward提高，但没有�
 
 全训练期重评分必须先与ledger reward核对。最大绝对误差超过`1e-6`则审计停止，不得继续解释。
 
+### 5.1 执行前一致性门修订
+
+首次执行在产生审计结果前按上述规则停止。根因是少量公式在CUDA上利用多层常数rolling mean的约`1e-8`浮点残差形成非零排序，而CPU得到数学上的精确零；其中一条公式的full reward相差58.90bp。这不是普通float误差，也不是token/reward错位。
+
+为了不把错误CPU信号用于子期评分，一致性门修订为逐公式执行：
+
+- exact token序列的CPU full reward与ledger相差超过`1e-6`，标记`device_sensitive`；
+- CPU full signal不满足原coverage/variation质量门，标记`cpu_quality_invalid`；
+- 两类公式单独报告并从CPU子期分布、rank和subtree锚点中排除；不得把它们当作零或负reward填回；
+- 若任一seed的极端top50出现排除，该seed关于“top50是否幸运复杂样本”的CPU结论作废，必须回到同型号GPU重评分；
+- early/late代表样本报告原样本数、排除数和剩余样本结论，设备敏感率本身作为复杂度风险证据。
+
+这是一项由设备数值语义触发的执行口径修订，不改变子期、候选选择或稳定性判读条件。首次失败运行的CPU稳定性输出不得作为研究结果。
+
 ## 6. 预先冻结的判读逻辑
 
 ### 6.1 “后期学到稳定区域”

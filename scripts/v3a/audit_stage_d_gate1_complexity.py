@@ -29,6 +29,7 @@ from alpha_etf.research_v3a.attempts import (  # noqa: E402
     AttemptStatus,
 )
 from alpha_etf.research_v3a.candidates import build_candidate_record  # noqa: E402
+from alpha_etf.research_v3a.candidates import CandidateConfig  # noqa: E402
 from alpha_etf.research_v3a.language import (  # noqa: E402
     Expression,
     FORMULA_VOCAB,
@@ -43,6 +44,7 @@ from alpha_etf.research_v3a.stage_d import load_stage_d_train_view  # noqa: E402
 from alpha_etf.research_v3a.torch_scoring import (  # noqa: E402
     TorchForwardTargets,
     score_signal_batch,
+    signal_quality_batch,
 )
 from alpha_etf.research_v3a.torch_vm import BatchTorchVM  # noqa: E402
 from scripts.v3a.export_top_formulas import select_curated_records  # noqa: E402
@@ -340,16 +342,19 @@ def _register_formula(
         train_summary={},
         attempt_index=0,
     )
-    key = candidate.formula_hash
+    key = hashlib.sha256(bytes(token_ids)).hexdigest()
     entry = registry.setdefault(
         key,
         {
+            "canonical_hash": candidate.formula_hash,
             "token_ids": tuple(int(value) for value in token_ids),
             "token_names": list(FORMULA_VOCAB.decode(token_ids)),
             "formula_text": compile_formula(token_ids).expression.text(),
             "expected_rewards": [],
         },
     )
+    if entry["token_ids"] != tuple(token_ids):
+        raise RuntimeError("Formula sequence hash collision")
     if expected_reward is not None:
         entry["expected_rewards"].append(float(expected_reward))
     return key
@@ -404,7 +409,7 @@ def _build_targets(train_view) -> tuple[dict[str, Any], dict[str, dict[str, str]
 
 def _score_registry(
     registry: dict[str, dict[str, Any]], train_view, targets: dict[str, Any]
-) -> tuple[dict[str, dict[str, float]], float]:
+) -> tuple[dict[str, dict[str, float | bool]], float, list[dict[str, Any]]]:
     device = torch.device("cpu")
     factors = torch.as_tensor(train_view.factor_values, dtype=torch.float32, device=device)
     mask = torch.as_tensor(train_view.tradable_mask, dtype=torch.bool, device=device)
@@ -418,8 +423,11 @@ def _score_registry(
         max_total_bytes=3 * 1024**3,
     )
     keys = sorted(registry)
-    output: dict[str, dict[str, float]] = {}
+    output: dict[str, dict[str, float | bool]] = {}
     max_difference = 0.0
+    max_difference_detail: dict[str, Any] | None = None
+    sensitive: list[dict[str, Any]] = []
+    candidate_config = CandidateConfig()
     for start in range(0, len(keys), 16):
         batch_keys = keys[start : start + 16]
         compiled = [compile_formula(registry[key]["token_ids"]) for key in batch_keys]
@@ -431,6 +439,12 @@ def _score_registry(
         vm_result = vm.execute(codes, lengths, factors, mask)
         if not bool(vm_result.valid.all().item()):
             raise RuntimeError("Registered audit formula is VM-invalid")
+        quality_valid, coverage, finite_std, _ = signal_quality_batch(
+            vm_result.signal,
+            torch_targets["full"],
+            min_coverage=candidate_config.min_coverage,
+            constant_std_eps=candidate_config.constant_std_eps,
+        )
         batch_scores: dict[str, torch.Tensor] = {}
         for name, target in torch_targets.items():
             scored = score_signal_batch(
@@ -441,28 +455,75 @@ def _score_registry(
             batch_scores[name] = scored.reward.detach().cpu()
         for row, key in enumerate(batch_keys):
             output[key] = {
-                name: float(values[row].item()) for name, values in batch_scores.items()
+                **{
+                    name: float(values[row].item())
+                    for name, values in batch_scores.items()
+                },
+                "cpu_quality_valid": bool(quality_valid[row].item()),
+                "cpu_coverage": float(coverage[row].item()),
+                "cpu_finite_std": float(finite_std[row].item()),
+                "device_sensitive": False,
             }
             for expected in registry[key]["expected_rewards"]:
-                max_difference = max(max_difference, abs(output[key]["full"] - expected))
-    if max_difference > FULL_REWARD_TOLERANCE:
-        raise RuntimeError(
-            f"Full-period rescoring differs from ledger: {max_difference} > "
-            f"{FULL_REWARD_TOLERANCE}"
-        )
-    return output, max_difference
+                difference = abs(float(output[key]["full"]) - expected)
+                if difference > max_difference:
+                    max_difference = difference
+                    max_difference_detail = {
+                        "sequence_hash": key,
+                        "token_names": registry[key]["token_names"],
+                        "rescored_reward": output[key]["full"],
+                        "expected_reward": expected,
+                    }
+            differences = [
+                abs(float(output[key]["full"]) - expected)
+                for expected in registry[key]["expected_rewards"]
+            ]
+            if differences and max(differences) > FULL_REWARD_TOLERANCE:
+                output[key]["device_sensitive"] = True
+                sensitive.append(
+                    {
+                        "sequence_hash": key,
+                        "token_names": registry[key]["token_names"],
+                        "max_abs_error": max(differences),
+                        "rescored_reward": output[key]["full"],
+                        "expected_rewards": registry[key]["expected_rewards"],
+                    }
+                )
+    sensitive.sort(key=lambda item: -item["max_abs_error"])
+    return output, max_difference, sensitive
 
 
-def _group_metrics(keys: list[str], scores: dict[str, dict[str, float]]) -> dict[str, Any]:
+def _eligible_keys(
+    keys: Iterable[str], scores: dict[str, dict[str, float | bool]]
+) -> list[str]:
+    return [
+        key
+        for key in keys
+        if not bool(scores[key]["device_sensitive"])
+        and bool(scores[key]["cpu_quality_valid"])
+    ]
+
+
+def _group_metrics(
+    keys: list[str], scores: dict[str, dict[str, float | bool]]
+) -> dict[str, Any]:
+    eligible = _eligible_keys(keys, scores)
+    if not eligible:
+        raise RuntimeError("Complexity audit group has no CPU-reproducible formulas")
     matrix = np.asarray(
-        [[scores[key][period] for period in ("S1", "S2", "S3")] for key in keys],
+        [
+            [float(scores[key][period]) for period in ("S1", "S2", "S3")]
+            for key in eligible
+        ],
         dtype=np.float64,
     )
-    full = np.asarray([scores[key]["full"] for key in keys], dtype=np.float64)
+    full = np.asarray([float(scores[key]["full"]) for key in eligible], dtype=np.float64)
     worst = matrix.min(axis=1)
     ranges = matrix.max(axis=1) - matrix.min(axis=1)
     return {
-        "count": len(keys),
+        "selected_count": len(keys),
+        "eligible_count": len(eligible),
+        "excluded_count": len(keys) - len(eligible),
         "full_median": float(np.median(full)),
         "subperiod_medians": {
             f"S{index + 1}": float(np.median(matrix[:, index])) for index in range(3)
@@ -621,7 +682,9 @@ def main() -> None:
         top50_keys = _register_rows(registry, records, top50_indices)
         complex_keys = _register_rows(registry, records, complex_indices)
         simple_keys = _register_rows(registry, records, simple_indices)
-        exact_top50[seed] = set(top50_keys)
+        exact_top50[seed] = {
+            str(registry[key]["canonical_hash"]) for key in top50_keys
+        }
 
         subtree_keys: dict[str, list[str]] = {}
         for top_key in top50_keys:
@@ -649,7 +712,7 @@ def main() -> None:
             }
         )
 
-    scores, max_difference = _score_registry(registry, train_view, targets)
+    scores, max_difference, sensitive = _score_registry(registry, train_view, targets)
 
     stable_seeds: list[dict[str, Any]] = []
     for item in seed_inputs:
@@ -715,9 +778,16 @@ def main() -> None:
 
     extreme_seeds: list[dict[str, Any]] = []
     for item in seed_inputs:
-        pool = item["complex_keys"]
+        pool = _eligible_keys(item["complex_keys"], scores)
+        top50_eligible = _eligible_keys(item["top50_keys"], scores)
+        if len(top50_eligible) != TOP_SIZE:
+            raise RuntimeError(
+                f"Seed {item['seed']} top50 contains a device-sensitive or CPU-invalid formula"
+            )
         period_values = {
-            period: np.asarray([scores[key][period] for key in pool], dtype=np.float64)
+            period: np.asarray(
+                [float(scores[key][period]) for key in pool], dtype=np.float64
+            )
             for period in ("S1", "S2", "S3")
         }
         correlations = [
@@ -739,13 +809,19 @@ def main() -> None:
         comparable = 0
         anchors: dict[str, str] = {}
         for top_key, descendant_keys in item["subtree_keys"].items():
-            if not descendant_keys:
+            eligible_descendants = _eligible_keys(descendant_keys, scores)
+            if not eligible_descendants:
                 continue
-            anchor = max(descendant_keys, key=lambda key: scores[key]["full"])
+            anchor = max(
+                eligible_descendants, key=lambda key: float(scores[key]["full"])
+            )
             anchors[top_key] = anchor
             comparable += 1
             deltas.append(
-                [scores[top_key][period] - scores[anchor][period] for period in ("S1", "S2", "S3")]
+                [
+                    float(scores[top_key][period]) - float(scores[anchor][period])
+                    for period in ("S1", "S2", "S3")
+                ]
             )
         delta_matrix = np.asarray(deltas, dtype=np.float64)
         subtree = {
@@ -796,6 +872,8 @@ def main() -> None:
         "registered_formula_count": len(registry),
         "full_reward_rescore_tolerance": FULL_REWARD_TOLERANCE,
         "full_reward_rescore_max_abs_error": max_difference,
+        "device_sensitive_formula_count": len(sensitive),
+        "device_sensitive_formulas": sensitive,
         "stable_region": {
             "seeds": stable_seeds,
             "features": feature_payload,
@@ -819,7 +897,7 @@ def main() -> None:
         for key in sorted(registry):
             handle.write(
                 json.dumps(
-                    {"formula_hash": key, **registry[key], "scores": scores[key]},
+                    {"sequence_hash": key, **registry[key], "scores": scores[key]},
                     ensure_ascii=False,
                     sort_keys=True,
                 )
