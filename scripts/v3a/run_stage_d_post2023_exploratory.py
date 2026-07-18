@@ -82,6 +82,7 @@ def _validate_approval(approval: dict[str, Any], protocol: dict[str, Any]) -> No
         or approval.get("protocol_id") != protocol["protocol_id"]
         or approval.get("scope")
         != "permanently_unseal_post2023_and_run_frozen_exploratory_once"
+        or approval.get("code_commit") != git_commit()
         or approval.get("exploratory_run_approved") is not True
         or approval.get("formal_final_approved") is not False
     ):
