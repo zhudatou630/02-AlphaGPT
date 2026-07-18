@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 import tempfile
@@ -74,6 +75,24 @@ class V3AValidationTests(unittest.TestCase):
         self.assertEqual(list(sells["reason"]), ["rank_exit"])
         self.assertEqual(summary["validation_days"], 3)
         self.assertFalse(summary["final_metrics_read"])
+        self.assertTrue(summary["validation_metrics_read"])
+        self.assertFalse(summary["post2023_metrics_read"])
+
+    def test_exploratory_scope_marks_post2023_as_permanently_read(self) -> None:
+        dates, symbols, mask, opens, closes, signal, config = self._fixture()
+        _, _, summary = run_formula_validation(
+            formula_id="exploratory",
+            signal=signal,
+            open_prices=opens,
+            close_prices=closes,
+            tradable_mask=mask,
+            dates=dates,
+            symbols=symbols,
+            config=replace(config, metrics_scope="post2023_exploratory"),
+        )
+        self.assertFalse(summary["validation_metrics_read"])
+        self.assertTrue(summary["post2023_metrics_read"])
+        self.assertTrue(summary["final_metrics_read"])
 
     def test_stop_loss_waits_for_open_and_reentry_requires_lost_eligibility(self) -> None:
         dates = pd.DatetimeIndex(

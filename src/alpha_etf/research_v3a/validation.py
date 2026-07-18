@@ -20,6 +20,7 @@ class ValidationConfig:
     hold_rank: int = 5
     robust_z_threshold: float = 1.5
     stop_loss: float = -0.07
+    metrics_scope: str = "validation"
 
 
 @dataclass
@@ -415,8 +416,11 @@ def run_formula_validation(
         "benchmark_total_return": float(benchmark[-1] - 1.0),
         "benchmark_max_drawdown": _max_drawdown(benchmark),
         "buy_hold_total_return": float(buy_hold[-1] - 1.0),
+        "metrics_scope": config.metrics_scope,
         "validation_or_final_metrics_read": True,
-        "final_metrics_read": False,
+        "validation_metrics_read": config.metrics_scope == "validation",
+        "post2023_metrics_read": config.metrics_scope == "post2023_exploratory",
+        "final_metrics_read": config.metrics_scope == "post2023_exploratory",
     }
     return daily, trades, summary
 
