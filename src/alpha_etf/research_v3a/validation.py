@@ -418,9 +418,12 @@ def run_formula_validation(
         "buy_hold_total_return": float(buy_hold[-1] - 1.0),
         "metrics_scope": config.metrics_scope,
         "validation_or_final_metrics_read": True,
-        "validation_metrics_read": config.metrics_scope == "validation",
-        "post2023_metrics_read": config.metrics_scope == "post2023_exploratory",
-        "final_metrics_read": config.metrics_scope == "post2023_exploratory",
+        "validation_metrics_read": config.metrics_scope
+        in {"validation", "full_history_diagnostic"},
+        "post2023_metrics_read": config.metrics_scope
+        in {"post2023_exploratory", "full_history_diagnostic"},
+        "final_metrics_read": config.metrics_scope
+        in {"post2023_exploratory", "full_history_diagnostic"},
     }
     return daily, trades, summary
 

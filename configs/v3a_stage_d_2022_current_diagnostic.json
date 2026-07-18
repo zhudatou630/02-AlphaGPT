@@ -1,0 +1,58 @@
+{
+  "schema_version": "etf-v3a-stage-d-2022-current-diagnostic-v1",
+  "protocol_id": "e418d4ef34ffa99606c0ef0eff9eb390e9c5c2f5ed5d22408e47226faffe6012",
+  "name": "v3a-stage-d-2022-current-continuous-diagnostic-20260718",
+  "run_approved": false,
+  "interpretation": {
+    "exploratory_only": true,
+    "formal_winner_allowed": false,
+    "formula_selection_allowed": false,
+    "changes_2022_outcome": false,
+    "frozen_2022_outcome": "no_surviving_rule",
+    "frozen_2022_result_sha256": "3565017f0446861856d8821069283036d1c9e9fbc6d752b65bb92b34bf290409",
+    "frozen_post2023_result_sha256": "31eedfb60e65b7ab1d42a31db1c5355c462fff8f152b7dd3f009708e11e710c6"
+  },
+  "split": {
+    "start": "2022-01-01",
+    "end": "2026-07-10",
+    "prior_signal_date": "2021-12-31",
+    "continuous_path": true,
+    "reset_at_2023": false,
+    "annual_reset": false,
+    "calendar_years": [2022, 2023, 2024, 2025, 2026]
+  },
+  "candidates": {
+    "final_groups_sha256": "12aa88da48942c11e23f02ec93d83a411e0e61e3cdcdcafaf9dc0a1ffa9f6860",
+    "methods": ["transformer", "random"],
+    "seeds": [101, 102, 103],
+    "rules": ["original_top50", "stable_complex", "paired_simple"]
+  },
+  "trading": {
+    "initial_cash": 1.0,
+    "min_universe": 10,
+    "slots": 3,
+    "buy_rank": 3,
+    "hold_rank": 5,
+    "robust_z_threshold": 1.5,
+    "stop_loss": -0.07,
+    "transaction_cost_bps": 0.0,
+    "cash_return": 0.0,
+    "max_holding_days": null,
+    "allow_fractional_shares": true,
+    "signal_dtype": "float32",
+    "execution_device": "cpu"
+  },
+  "reporting": {
+    "quantile_method": "linear",
+    "group_quantiles": [0.5, 0.75],
+    "metrics": [
+      "total_return",
+      "annualized_return",
+      "max_drawdown",
+      "average_cash_weight",
+      "calendar_year_returns"
+    ],
+    "typical_formula_rule": "closest_to_group_total_return_median_then_sequence_hash",
+    "formal_pass_fail_generated": false
+  }
+}

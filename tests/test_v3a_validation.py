@@ -94,6 +94,20 @@ class V3AValidationTests(unittest.TestCase):
         self.assertTrue(summary["post2023_metrics_read"])
         self.assertTrue(summary["final_metrics_read"])
 
+        _, _, full = run_formula_validation(
+            formula_id="full-history",
+            signal=signal,
+            open_prices=opens,
+            close_prices=closes,
+            tradable_mask=mask,
+            dates=dates,
+            symbols=symbols,
+            config=replace(config, metrics_scope="full_history_diagnostic"),
+        )
+        self.assertTrue(full["validation_metrics_read"])
+        self.assertTrue(full["post2023_metrics_read"])
+        self.assertTrue(full["final_metrics_read"])
+
     def test_stop_loss_waits_for_open_and_reentry_requires_lost_eligibility(self) -> None:
         dates = pd.DatetimeIndex(
             pd.to_datetime(
