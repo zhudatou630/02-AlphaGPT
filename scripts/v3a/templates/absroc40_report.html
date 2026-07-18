@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ABS(ROC(40)) 长周期回测</title>
+  <style>
+    :root {
+      --bg: #f5f7f8;
+      --surface: #ffffff;
+      --text: #172026;
+      --muted: #637078;
+      --line: #dce2e5;
+      --green: #13795b;
+      --green-soft: #e8f3ef;
+      --red: #bd3d3a;
+      --red-soft: #f8ebea;
+      --blue: #356aa0;
+      --yellow: #9a6a14;
+      --yellow-soft: #fbf3df;
+      --shadow: 0 1px 2px rgba(23, 32, 38, 0.06);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      letter-spacing: 0;
+      line-height: 1.5;
+    }
+    button, input, select { font: inherit; letter-spacing: 0; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(255, 255, 255, 0.96);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(8px);
+    }
+    .topbar-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      min-height: 54px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+    .brand { font-size: 15px; font-weight: 700; white-space: nowrap; }
+    .nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+    .nav::-webkit-scrollbar { display: none; }
+    .nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 8px 9px;
+      white-space: nowrap;
+    }
+    .nav a:hover { color: var(--text); }
+    main { max-width: 1440px; margin: 0 auto; padding: 28px 24px 64px; }
+    .report-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 24px;
+      padding-bottom: 22px;
+    }
+    h1 { margin: 0 0 7px; font-size: 26px; line-height: 1.25; font-weight: 750; }
+    .subtitle { margin: 0; color: var(--muted); font-size: 14px; }
+    .badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+    .badge {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 5px 8px;
+      white-space: nowrap;
+    }
+    .badge.warn { border-color: #e9cf95; background: var(--yellow-soft); color: #76500e; }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 26px;
+    }
+    .metric {
+      min-width: 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      box-shadow: var(--shadow);
+      padding: 13px 14px 12px;
+    }
+    .metric-label { color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+    .metric-value { font-size: 21px; line-height: 1.2; font-weight: 720; white-space: nowrap; }
+    .metric-value.green { color: var(--green); }
+    .metric-value.red { color: var(--red); }
+    .metric-note { color: var(--muted); font-size: 11px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .insight {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 14px;
+      border: 1px solid #e9cf95;
+      border-left: 4px solid var(--yellow);
+      border-radius: 5px;
+      background: var(--yellow-soft);
+      padding: 11px 13px;
+      color: #65450d;
+      font-size: 13px;
+    }
+    .contribution-metrics {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    section {
+      scroll-margin-top: 72px;
+      padding: 30px 0;
+      border-top: 1px solid var(--line);
+    }
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 20px;
+      margin-bottom: 16px;
+    }
+    h2 { font-size: 18px; line-height: 1.3; margin: 0 0 3px; }
+    .section-note { margin: 0; color: var(--muted); font-size: 13px; }
+    .toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .segmented {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      overflow: hidden;
+      background: var(--surface);
+    }
+    .segmented button {
+      min-height: 32px;
+      border: 0;
+      border-right: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      padding: 5px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .segmented button:last-child { border-right: 0; }
+    .segmented button.active { background: var(--green-soft); color: var(--green); font-weight: 650; }
+    .chart-shell {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      box-shadow: var(--shadow);
+      padding: 8px 10px 4px;
+      overflow: hidden;
+    }
+    .chart { width: 100%; height: 360px; }
+    .chart.tall { height: 590px; }
+    .chart.medium { height: 400px; }
+    .chart.small { height: 310px; }
+    .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .three-col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .panel {
+      min-width: 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .panel-head { padding: 13px 14px 0; }
+    .panel-title { margin: 0; font-size: 14px; font-weight: 680; }
+    .panel-note { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+    .table-wrap { width: 100%; overflow: auto; }
+    .table-wrap.fixed { max-height: 420px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      text-align: left;
+      background: #f8fafb;
+      color: var(--muted);
+      font-weight: 650;
+      border-bottom: 1px solid var(--line);
+      padding: 9px 11px;
+      white-space: nowrap;
+    }
+    td { padding: 8px 11px; border-bottom: 1px solid #edf0f2; white-space: nowrap; }
+    tbody tr:hover { background: #f7faf9; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .positive { color: var(--green); }
+    .negative { color: var(--red); }
+    .trade-tools {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) 130px 130px 130px 130px;
+      gap: 9px;
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .control {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 6px 9px;
+      outline: none;
+    }
+    .control:focus { border-color: var(--green); box-shadow: 0 0 0 2px rgba(19, 121, 91, 0.12); }
+    .table-status { padding: 9px 14px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); }
+    .research-note {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .note-block { border-left: 3px solid var(--yellow); padding: 2px 12px; }
+    .note-block h3 { margin: 0 0 5px; font-size: 14px; }
+    .note-block p { margin: 0; color: var(--muted); font-size: 12px; }
+    .identity {
+      margin-top: 20px;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      color: var(--muted);
+      font-size: 11px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 5px 20px;
+    }
+    .identity code { color: #445158; overflow-wrap: anywhere; }
+    .empty { color: var(--muted); text-align: center; padding: 26px; }
+    @media (max-width: 1080px) {
+      .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .contribution-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .three-col { grid-template-columns: 1fr 1fr; }
+      .trade-tools { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 720px) {
+      .topbar-inner { padding: 0 14px; gap: 14px; }
+      main { padding: 20px 14px 48px; }
+      .report-header, .section-head { display: block; }
+      .badges { justify-content: flex-start; margin-top: 14px; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .contribution-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metric-value { font-size: 18px; }
+      .toolbar { justify-content: flex-start; margin-top: 12px; }
+      .two-col, .three-col, .research-note { grid-template-columns: 1fr; }
+      .trade-tools { grid-template-columns: 1fr; }
+      .chart.tall { height: 520px; }
+      .chart.medium { height: 360px; }
+      .chart.small { height: 300px; }
+      .identity { grid-template-columns: 1fr; }
+      h1 { font-size: 23px; }
+    }
+  </style>
+  <script>/*__ECHARTS_BUNDLE__*/</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">ABS(ROC40) 回测</div>
+      <nav class="nav" aria-label="报告章节">
+        <a href="#overview">总览</a>
+        <a href="#consistency">跨期表现</a>
+        <a href="#positions">持仓状态</a>
+        <a href="#trades">交易分析</a>
+        <a href="#drawdowns">回撤事件</a>
+        <a href="#limits">研究边界</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="report-header">
+      <div>
+        <h1>ABS(ROC(40)) 长周期回测</h1>
+        <p class="subtitle"><span id="date-range"></span> · 3进5出 · 3槽位 · -7%止损</p>
+      </div>
+      <div class="badges">
+        <span class="badge warn">探索性回顾</span>
+        <span class="badge warn">零交易成本</span>
+        <span class="badge">固定当代ETF名单</span>
+      </div>
+    </div>
+
+    <div class="metrics" id="metric-grid"></div>
+
+    <section id="overview">
+      <div class="section-head">
+        <div>
+          <h2>净值与回撤</h2>
+          <p class="section-note">上下图共享时间轴；淡色区域标记不同研究身份。</p>
+        </div>
+        <div class="toolbar">
+          <div class="segmented" id="range-controls" aria-label="时间范围">
+            <button type="button" data-range="all" class="active">全部</button>
+            <button type="button" data-range="train">2017-2021</button>
+            <button type="button" data-range="later">2022至今</button>
+            <button type="button" data-range="3y">最近3年</button>
+          </div>
+          <div class="segmented" id="scale-controls" aria-label="净值坐标">
+            <button type="button" data-scale="value" class="active">线性</button>
+            <button type="button" data-scale="log">对数</button>
+          </div>
+        </div>
+      </div>
+      <div class="chart-shell"><div id="main-chart" class="chart tall" role="img" aria-label="净值与回撤图"></div></div>
+    </section>
+
+    <section id="consistency">
+      <div class="section-head">
+        <div>
+          <h2>跨年份稳定性</h2>
+          <p class="section-note">年度柱状图看相对表现，月度热力图看收益是否集中，滚动一年看持续性。</p>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head"><p class="panel-title">年度收益</p><p class="panel-note">2026为截至7月10日</p></div>
+          <div id="annual-chart" class="chart medium"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><p class="panel-title">月度收益热力图</p><p class="panel-note">红色为负，绿色为正</p></div>
+          <div id="monthly-chart" class="chart medium"></div>
+        </div>
+      </div>
+      <div class="chart-shell" style="margin-top:14px"><div id="rolling-chart" class="chart small"></div></div>
+    </section>
+
+    <section id="positions">
+      <div class="section-head">
+        <div>
+          <h2>持仓状态与ETF池扩张</h2>
+          <p class="section-note">同时观察现金、持仓槽位和当日可交易ETF数量，避免把池子扩张误认为纯粹的公式增益。</p>
+        </div>
+      </div>
+      <div class="chart-shell"><div id="state-chart" class="chart medium"></div></div>
+      <div class="panel" style="margin-top:14px">
+        <div class="panel-head"><p class="panel-title">ETF持有与交易频次</p><p class="panel-note">按持有交易日降序，不代表收益贡献</p></div>
+        <div class="table-wrap fixed">
+          <table>
+            <thead><tr><th>ETF</th><th>名称</th><th class="num">持有日</th><th class="num">买入次数</th><th class="num">已平仓</th><th class="num">平均平仓收益</th></tr></thead>
+            <tbody id="etf-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="trades">
+      <div class="section-head">
+        <div>
+          <h2>交易贡献与归因</h2>
+          <p class="section-note">先回答利润是否依赖少数右尾交易，再按ETF、平仓年、持有期和退出原因拆解已实现利润。</p>
+        </div>
+      </div>
+      <div class="insight" id="tail-insight"></div>
+      <div class="contribution-metrics" id="contribution-metrics"></div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head"><p class="panel-title">利润对账桥</p><p class="panel-note">账户单位，初始资金=1；四项可严格对账</p></div>
+          <div id="profit-bridge-chart" class="chart small"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><p class="panel-title">最佳到最差交易的累计利润</p><p class="panel-note">按实际资金利润排序；曲线先升后降说明右尾盈利被大量亏损抵消</p></div>
+          <div id="concentration-chart" class="chart small"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <div class="panel-head"><p class="panel-title">不同单笔收益区间的贡献</p><p class="panel-note">柱为该区间已实现净利润，折线为平仓笔数</p></div>
+        <div id="return-bin-chart" class="chart small"></div>
+      </div>
+
+      <div class="section-head" style="margin-top:28px">
+        <div>
+          <h2 style="font-size:16px">正负ROC：同一公式中的两种机制</h2>
+          <p class="section-note">按买入决策日的原始带符号ROC(40)分类；正数代表过去40日上涨，负数代表过去40日下跌。</p>
+        </div>
+      </div>
+      <div class="insight" id="signed-roc-insight"></div>
+      <div class="contribution-metrics" id="signed-roc-metrics"></div>
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head"><p class="panel-title">买入次数与完整利润贡献</p><p class="panel-note">柱为已实现/未实现利润，折线为买入次数</p></div>
+          <div id="roc-direction-chart" class="chart small"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><p class="panel-title">退出原因的资金结果</p><p class="panel-note">排名退出利润减去止损损失后，得到各方向已实现净利润</p></div>
+          <div id="roc-exit-chart" class="chart small"></div>
+        </div>
+      </div>
+      <div class="two-col" style="margin-top:14px">
+        <div class="panel">
+          <div class="panel-head"><p class="panel-title">持有周期贡献</p><p class="panel-note">负ROC利润集中在前10天，正ROC利润集中在21天以后</p></div>
+          <div id="roc-holding-chart" class="chart small"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><p class="panel-title">排名退出的右尾差异</p><p class="panel-note">正ROC中位数略亏，但95%和99%分位远高于负ROC</p></div>
+          <div id="roc-tail-chart" class="chart small"></div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>买入方向</th><th>退出原因</th><th class="num">笔数</th><th class="num">占该方向</th><th class="num">胜率</th><th class="num">平均收益</th><th class="num">中位数收益</th><th class="num">平均持有</th><th class="num">已实现利润</th></tr></thead>
+            <tbody id="roc-exit-table"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="research-note" style="margin-top:14px;grid-template-columns:repeat(2,minmax(0,1fr))">
+        <div class="note-block"><h3>负ROC：短期均值回归</h3><p id="negative-roc-mechanism"></p></div>
+        <div class="note-block"><h3>正ROC：长期趋势右尾</h3><p id="positive-roc-mechanism"></p></div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <p class="panel-title">已实现利润归因</p>
+          <p class="panel-note">这是实际资金流的会计归因，不代表删掉某类交易后策略仍会得到相同结果</p>
+          <div class="segmented" id="attribution-controls" style="margin-top:10px" aria-label="归因维度">
+            <button type="button" data-dimension="etf" class="active">按ETF</button>
+            <button type="button" data-dimension="year">按平仓年</button>
+            <button type="button" data-dimension="holding">按持有期</button>
+            <button type="button" data-dimension="exit_reason">按退出原因</button>
+          </div>
+        </div>
+        <div id="attribution-chart" class="chart medium"></div>
+        <div class="table-wrap fixed">
+          <table>
+            <thead><tr><th>归因对象</th><th class="num">已实现净利润</th><th class="num">毛盈利</th><th class="num">毛亏损</th><th class="num">平仓笔数</th><th class="num">胜率</th><th class="num">平均收益率</th></tr></thead>
+            <tbody id="attribution-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="section-head" style="margin-top:24px">
+        <div><h2 style="font-size:15px">交易形态与明细</h2><p class="section-note">收益率分布和持有时间用于理解交易形态，不替代上面的资金贡献。</p></div>
+      </div>
+      <div class="three-col">
+        <div class="panel">
+          <div class="panel-head"><p class="panel-title">单笔平仓收益分布</p></div>
+          <div id="trade-hist-chart" class="chart small"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><p class="panel-title">持有时间与收益</p></div>
+          <div id="trade-scatter-chart" class="chart small"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><p class="panel-title">退出原因</p></div>
+          <div id="exit-chart" class="chart small"></div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:14px">
+        <div class="trade-tools">
+          <input id="trade-search" class="control" type="search" placeholder="搜索ETF代码或名称" aria-label="搜索交易">
+          <select id="trade-action" class="control" aria-label="交易方向"><option value="all">全部方向</option><option value="BUY">买入</option><option value="SELL">卖出</option></select>
+          <select id="trade-roc-direction" class="control" aria-label="买入ROC方向"><option value="all">全部ROC</option><option value="positive">正ROC</option><option value="negative">负ROC</option></select>
+          <select id="trade-reason" class="control" aria-label="交易原因"><option value="all">全部原因</option><option value="entry">建仓</option><option value="rank_exit">排名退出</option><option value="stop_loss">止损</option></select>
+          <select id="trade-year" class="control" aria-label="交易年份"><option value="all">全部年份</option></select>
+        </div>
+        <div class="table-wrap fixed">
+          <table>
+            <thead><tr><th>日期</th><th>交易</th><th>ETF</th><th>名称</th><th>买入方向</th><th class="num">买入ROC40</th><th>原因</th><th>信号日</th><th class="num">价格</th><th class="num">金额</th><th class="num">平仓收益率</th><th class="num">已实现利润</th></tr></thead>
+            <tbody id="trade-table"></tbody>
+          </table>
+        </div>
+        <div class="table-status" id="trade-status"></div>
+      </div>
+    </section>
+
+    <section id="drawdowns">
+      <div class="section-head">
+        <div>
+          <h2>最严重的五次回撤</h2>
+          <p class="section-note">回撤从前高开始，到净值恢复前高结束；尚未恢复时以数据末日计时。</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>前高</th><th>谷底</th><th>恢复</th><th class="num">最大回撤</th><th class="num">持续日历天数</th><th>状态</th></tr></thead>
+            <tbody id="drawdown-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="limits">
+      <div class="section-head">
+        <div><h2>研究边界</h2><p class="section-note">这些限制不会否定历史结果，但决定了它能被解释到什么程度。</p></div>
+      </div>
+      <div class="research-note">
+        <div class="note-block"><h3>不是新样本外</h3><p>2017至2021与公式发现期重叠；2022至今也已经读取，只能作为探索性历史。</p></div>
+        <div class="note-block"><h3>存在事后选池偏差</h3><p>使用当前冻结的35只ETF回看历史，虽按上市和可交易状态动态进入，但没有纳入后来消失或未入选的ETF。</p></div>
+        <div class="note-block"><h3>尚未计交易摩擦</h3><p>581次买入、平均持有约15天，手续费和滑点可能明显压低实际可实现收益。</p></div>
+      </div>
+      <div class="identity" id="identity"></div>
+    </section>
+  </main>
+
+  <script>
+    const REPORT = /*__REPORT_DATA__*/;
+    const COLORS = { green: '#13795b', red: '#bd3d3a', blue: '#356aa0', gray: '#8b969c', yellow: '#9a6a14', line: '#dce2e5', text: '#172026', muted: '#637078' };
+    const charts = [];
+    const pct = (value, digits = 2) => value == null ? '—' : `${value >= 0 ? '+' : ''}${(value * 100).toFixed(digits)}%`;
+    const plainPct = (value, digits = 2) => value == null ? '—' : `${(value * 100).toFixed(digits)}%`;
+    const number = (value, digits = 2) => value == null ? '—' : Number(value).toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    const account = (value, digits = 3) => value == null ? '—' : `${value >= 0 ? '+' : ''}${number(value, digits)}`;
+    const reasonLabel = { entry: '建仓', rank_exit: '排名退出', stop_loss: '止损' };
+    const actionLabel = { BUY: '买入', SELL: '卖出' };
+    const baseText = { fontFamily: 'Inter, Segoe UI, PingFang SC, Microsoft YaHei, Arial, sans-serif', color: COLORS.text };
+    const axisStyle = { axisLine: { lineStyle: { color: COLORS.line } }, axisTick: { show: false }, axisLabel: { color: COLORS.muted, fontSize: 11 }, splitLine: { lineStyle: { color: '#edf0f2' } } };
+    const tooltipStyle = { backgroundColor: 'rgba(23,32,38,.94)', borderWidth: 0, textStyle: { color: '#fff', fontSize: 12 }, extraCssText: 'border-radius:4px;box-shadow:none' };
+    const init = id => { const chart = echarts.init(document.getElementById(id), null, { renderer: 'canvas' }); charts.push(chart); return chart; };
+
+    document.getElementById('date-range').textContent = `${REPORT.identity.date_start} 至 ${REPORT.identity.date_end}`;
+    const metrics = [
+      ['累计收益', pct(REPORT.metrics.strategy.total_return), `基准 ${pct(REPORT.metrics.benchmark.total_return)}`, 'green'],
+      ['年化收益', pct(REPORT.metrics.strategy.annualized_return), `基准 ${pct(REPORT.metrics.benchmark.annualized_return)}`, 'green'],
+      ['最大回撤', plainPct(REPORT.metrics.strategy.max_drawdown), `基准 ${plainPct(REPORT.metrics.benchmark.max_drawdown)}`, 'red'],
+      ['平均现金权重', plainPct(REPORT.metrics.strategy.average_cash_weight), `平均持仓 ${REPORT.metrics.strategy.average_position_count.toFixed(2)}只`, ''],
+      ['已平仓胜率', plainPct(REPORT.metrics.strategy.closed_trade_win_rate), `平均单笔 ${pct(REPORT.metrics.strategy.closed_trade_average_pnl)}`, ''],
+      ['买入 / 卖出', `${REPORT.metrics.strategy.buy_count} / ${REPORT.metrics.strategy.sell_count}`, `中位持有 ${REPORT.metrics.strategy.median_holding_calendar_days.toFixed(0)}天`, '']
+    ];
+    document.getElementById('metric-grid').innerHTML = metrics.map(([label, value, note, tone]) => `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value ${tone}">${value}</div><div class="metric-note">${note}</div></div>`).join('');
+
+    const mainChart = init('main-chart');
+    const markAreas = [[{ name: '与公式发现期重叠', xAxis: '2017-01-03', itemStyle: { color: 'rgba(154,106,20,.055)' } }, { xAxis: '2021-12-31' }], [{ name: '已读取探索期', xAxis: '2022-01-01', itemStyle: { color: 'rgba(53,106,160,.045)' } }, { xAxis: REPORT.identity.date_end }]];
+    const mainOption = {
+      animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis', axisPointer: { type: 'cross' }, valueFormatter: value => number(value, 3) },
+      legend: { top: 7, left: 52, itemWidth: 18, textStyle: { color: COLORS.muted, fontSize: 11 }, selected: { '期初等权买入持有': false } },
+      grid: [{ left: 52, right: 28, top: 44, height: '55%' }, { left: 52, right: 28, top: '69%', height: '18%' }],
+      xAxis: [{ type: 'category', data: REPORT.path.dates, boundaryGap: false, axisLabel: { show: false }, axisLine: { lineStyle: { color: COLORS.line } } }, { type: 'category', gridIndex: 1, data: REPORT.path.dates, boundaryGap: false, ...axisStyle }],
+      yAxis: [{ type: 'value', name: '净值', scale: true, ...axisStyle }, { type: 'value', gridIndex: 1, name: '回撤', max: 0, axisLabel: { color: COLORS.muted, formatter: value => `${(value * 100).toFixed(0)}%` }, splitLine: axisStyle.splitLine }],
+      dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], filterMode: 'none' }, { type: 'slider', xAxisIndex: [0, 1], bottom: 5, height: 22, borderColor: COLORS.line, fillerColor: 'rgba(19,121,91,.12)', handleStyle: { color: COLORS.green }, textStyle: { color: COLORS.muted } }],
+      series: [
+        { name: 'ABS(ROC40)', type: 'line', data: REPORT.path.strategy, symbol: 'none', lineStyle: { width: 2.2, color: COLORS.green }, itemStyle: { color: COLORS.green }, markArea: { silent: true, label: { color: COLORS.muted, fontSize: 10 }, data: markAreas } },
+        { name: '动态ETF等权基准', type: 'line', data: REPORT.path.benchmark, symbol: 'none', lineStyle: { width: 1.5, color: COLORS.blue }, itemStyle: { color: COLORS.blue } },
+        { name: '期初等权买入持有', type: 'line', data: REPORT.path.buy_hold, symbol: 'none', lineStyle: { width: 1.2, type: 'dashed', color: COLORS.gray }, itemStyle: { color: COLORS.gray } },
+        { name: '策略回撤', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: REPORT.path.strategy_drawdown, symbol: 'none', lineStyle: { width: 1.5, color: COLORS.red }, areaStyle: { color: 'rgba(189,61,58,.12)' } },
+        { name: '基准回撤', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: REPORT.path.benchmark_drawdown, symbol: 'none', lineStyle: { width: 1.1, color: COLORS.blue, opacity: .8 } }
+      ]
+    };
+    mainChart.setOption(mainOption);
+
+    document.getElementById('range-controls').addEventListener('click', event => {
+      const button = event.target.closest('button'); if (!button) return;
+      button.parentElement.querySelectorAll('button').forEach(node => node.classList.toggle('active', node === button));
+      const last = REPORT.path.dates.length - 1; let start = 0; let end = last;
+      if (button.dataset.range === 'train') end = REPORT.path.dates.findIndex(date => date >= '2022-01-01') - 1;
+      if (button.dataset.range === 'later') start = REPORT.path.dates.findIndex(date => date >= '2022-01-01');
+      if (button.dataset.range === '3y') { const cutoff = new Date(REPORT.identity.date_end); cutoff.setFullYear(cutoff.getFullYear() - 3); start = REPORT.path.dates.findIndex(date => date >= cutoff.toISOString().slice(0, 10)); }
+      mainChart.dispatchAction({ type: 'dataZoom', startValue: Math.max(0, start), endValue: end });
+    });
+    document.getElementById('scale-controls').addEventListener('click', event => {
+      const button = event.target.closest('button'); if (!button) return;
+      button.parentElement.querySelectorAll('button').forEach(node => node.classList.toggle('active', node === button));
+      mainChart.setOption({ yAxis: [{ type: button.dataset.scale, name: '净值', scale: true }] });
+    });
+
+    const annualChart = init('annual-chart');
+    annualChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis', valueFormatter: value => pct(value) }, legend: { top: 4, textStyle: { color: COLORS.muted, fontSize: 11 } }, grid: { left: 52, right: 18, top: 42, bottom: 34 }, xAxis: { type: 'category', data: REPORT.annual.years, ...axisStyle }, yAxis: { type: 'value', axisLabel: { color: COLORS.muted, formatter: value => `${(value * 100).toFixed(0)}%` }, splitLine: axisStyle.splitLine }, series: [{ name: '策略', type: 'bar', data: REPORT.annual.strategy, itemStyle: { color: params => params.value >= 0 ? COLORS.green : COLORS.red } }, { name: '基准', type: 'bar', data: REPORT.annual.benchmark, itemStyle: { color: COLORS.blue, opacity: .78 } }] });
+
+    const monthlyChart = init('monthly-chart');
+    monthlyChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, formatter: params => `${REPORT.monthly.years[params.value[1]]}年${params.value[0] + 1}月<br><b>${pct(params.value[2])}</b>` }, grid: { left: 58, right: 14, top: 18, bottom: 70 }, xAxis: { type: 'category', data: ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'], splitArea: { show: true }, ...axisStyle }, yAxis: { type: 'category', data: REPORT.monthly.years, splitArea: { show: true }, ...axisStyle }, visualMap: { min: -0.15, max: 0.15, calculable: false, orient: 'horizontal', left: 'center', bottom: 15, text: ['正收益','负收益'], textStyle: { color: COLORS.muted, fontSize: 10 }, inRange: { color: ['#c65450','#f5f7f8','#2d8a68'] } }, series: [{ type: 'heatmap', data: REPORT.monthly.cells, label: { show: true, fontSize: 9, formatter: params => params.value[2] == null ? '' : `${(params.value[2] * 100).toFixed(0)}%` }, emphasis: { itemStyle: { borderColor: COLORS.text, borderWidth: 1 } } }] });
+
+    const rollingChart = init('rolling-chart');
+    rollingChart.setOption({ animation: false, textStyle: baseText, title: { text: '滚动252交易日收益', left: 42, top: 8, textStyle: { fontSize: 13, fontWeight: 650, color: COLORS.text } }, tooltip: { ...tooltipStyle, trigger: 'axis', valueFormatter: value => pct(value) }, legend: { top: 8, right: 22, textStyle: { color: COLORS.muted, fontSize: 11 } }, grid: { left: 52, right: 24, top: 48, bottom: 38 }, xAxis: { type: 'category', data: REPORT.path.dates, boundaryGap: false, ...axisStyle }, yAxis: { type: 'value', axisLabel: { color: COLORS.muted, formatter: value => `${(value * 100).toFixed(0)}%` }, splitLine: axisStyle.splitLine }, dataZoom: [{ type: 'inside' }], series: [{ name: '策略', type: 'line', data: REPORT.path.rolling_strategy, symbol: 'none', connectNulls: false, lineStyle: { color: COLORS.green, width: 1.8 } }, { name: '基准', type: 'line', data: REPORT.path.rolling_benchmark, symbol: 'none', connectNulls: false, lineStyle: { color: COLORS.blue, width: 1.3 } }] });
+
+    const stateChart = init('state-chart');
+    stateChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis' }, legend: { top: 6, textStyle: { color: COLORS.muted, fontSize: 11 } }, grid: { left: 52, right: 54, top: 45, bottom: 42 }, xAxis: { type: 'category', data: REPORT.path.dates, boundaryGap: false, ...axisStyle }, yAxis: [{ type: 'value', name: '现金 / 持仓', min: 0, max: 1, axisLabel: { color: COLORS.muted, formatter: value => `${(value * 100).toFixed(0)}%` }, splitLine: axisStyle.splitLine }, { type: 'value', name: 'ETF数量', min: 0, axisLabel: { color: COLORS.muted }, splitLine: { show: false } }], dataZoom: [{ type: 'inside' }], series: [{ name: '现金权重', type: 'line', data: REPORT.path.cash_weight, symbol: 'none', lineStyle: { color: COLORS.yellow, width: 1.3 }, areaStyle: { color: 'rgba(154,106,20,.08)' }, tooltip: { valueFormatter: value => plainPct(value) } }, { name: '槽位占用率', type: 'line', data: REPORT.path.position_count.map(value => value / 3), symbol: 'none', lineStyle: { color: COLORS.green, width: 1.3 }, tooltip: { valueFormatter: value => plainPct(value) } }, { name: '可交易ETF数', type: 'line', yAxisIndex: 1, data: REPORT.path.available_count, symbol: 'none', step: 'end', lineStyle: { color: COLORS.blue, width: 1.5 }, tooltip: { valueFormatter: value => `${value}只` } }] });
+
+    const contribution = REPORT.trade_contribution;
+    const contributionSummary = contribution.summary;
+    const top1 = contribution.concentration.find(row => row.fraction === 0.01);
+    const top5 = contribution.concentration.find(row => row.fraction === 0.05);
+    const top10 = contribution.concentration.find(row => row.fraction === 0.10);
+    const longHolding = contribution.attribution.holding.find(row => row.key === '60天以上');
+    const shortHoldingNet = contribution.attribution.holding.filter(row => ['1-5天','6-10天','11-20天'].includes(row.key)).reduce((sum, row) => sum + row.net_pnl, 0);
+    document.getElementById('tail-insight').innerHTML = `<strong>结论：</strong><span>策略明显依赖右尾交易。最赚钱的 ${top5.count} 笔（约5%）贡献了 ${plainPct(top5.gross_profit_share)} 的毛盈利；仅 ${longHolding.trade_count} 笔持有超过60天的交易贡献 ${account(longHolding.net_pnl)}，而持有20天以内的交易合计 ${account(shortHoldingNet)}。这些是实际资金贡献，不是删除交易后的反事实收益。</span>`;
+    const contributionMetrics = [
+      ['毛盈利', account(contributionSummary.gross_profit), '所有盈利平仓之和', 'green'],
+      ['毛亏损', account(contributionSummary.gross_loss), '所有亏损平仓之和', 'red'],
+      ['已实现净利润', account(contributionSummary.realized_net), `${contributionSummary.positive_count}盈 / ${contributionSummary.negative_count}亏 / ${contributionSummary.breakeven_count}平`, 'green'],
+      ['未平仓浮盈', account(contributionSummary.unrealized_pnl), `${contribution.open_positions.length}个期末持仓`, 'green'],
+      ['利润因子', number(contributionSummary.profit_factor, 2), '毛盈利 ÷ |毛亏损|', ''],
+      ['前1%毛盈利占比', plainPct(top1.gross_profit_share), `${top1.count}笔贡献 ${account(top1.pnl)}`, '']
+    ];
+    document.getElementById('contribution-metrics').innerHTML = contributionMetrics.map(([label, value, note, tone]) => `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value ${tone}">${value}</div><div class="metric-note">${note}</div></div>`).join('');
+
+    const bridgeChart = init('profit-bridge-chart');
+    const bridgeValues = [contributionSummary.gross_profit, contributionSummary.gross_loss, contributionSummary.realized_net, contributionSummary.unrealized_pnl, contributionSummary.total_profit];
+    bridgeChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis', formatter: params => `${params[0].name}<br><b>${account(params[0].value)}</b>` }, grid: { left: 52, right: 16, top: 24, bottom: 48 }, xAxis: { type: 'category', data: ['毛盈利','毛亏损','已实现净利润','未平仓浮盈','期末净利润'], axisLabel: { color: COLORS.muted, fontSize: 10, interval: 0 }, axisLine: axisStyle.axisLine, axisTick: { show: false } }, yAxis: { type: 'value', name: '账户单位', ...axisStyle }, series: [{ type: 'bar', barMaxWidth: 42, data: bridgeValues.map((value, index) => ({ value, itemStyle: { color: value < 0 ? COLORS.red : index === 4 ? COLORS.blue : COLORS.green } })), label: { show: true, position: 'outside', color: COLORS.text, fontSize: 10, formatter: params => account(params.value, 2) } }] });
+
+    const concentrationChart = init('concentration-chart');
+    concentrationChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis', formatter: params => `最佳的 ${(params[0].value[0] * 100).toFixed(1)}% 交易<br>累计已实现利润 <b>${account(params[0].value[1])}</b>` }, grid: { left: 52, right: 18, top: 24, bottom: 45 }, xAxis: { type: 'value', min: 0, max: 1, name: '由最佳到最差的交易比例', axisLabel: { color: COLORS.muted, formatter: value => `${(value * 100).toFixed(0)}%` }, splitLine: axisStyle.splitLine }, yAxis: { type: 'value', name: '累计利润', ...axisStyle }, series: [{ type: 'line', symbol: 'none', data: contribution.curve.trade_fraction.map((fraction, index) => [fraction, contribution.curve.cumulative_pnl[index]]), lineStyle: { color: COLORS.green, width: 2 }, areaStyle: { color: 'rgba(19,121,91,.08)' }, markLine: { silent: true, symbol: 'none', label: { color: COLORS.muted, fontSize: 9, formatter: params => params.name }, lineStyle: { type: 'dashed', color: COLORS.gray }, data: [{ name: '前5%', xAxis: .05 }, { name: '前10%', xAxis: .10 }, { name: '最终已实现', yAxis: contributionSummary.realized_net }] } }] });
+
+    const returnBinChart = init('return-bin-chart');
+    returnBinChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis', formatter: params => { const row = contribution.return_bins[params[0].dataIndex]; return `${row.label}<br>净利润 <b>${account(row.net_pnl)}</b><br>毛盈利 ${account(row.gross_profit)}<br>毛亏损 ${account(row.gross_loss)}<br>${row.trade_count}笔 · 胜率 ${plainPct(row.win_rate)}`; } }, legend: { top: 5, textStyle: { color: COLORS.muted, fontSize: 11 } }, grid: { left: 54, right: 54, top: 42, bottom: 44 }, xAxis: { type: 'category', data: contribution.return_bins.map(row => row.label), ...axisStyle }, yAxis: [{ type: 'value', name: '已实现净利润', ...axisStyle }, { type: 'value', name: '平仓笔数', splitLine: { show: false }, axisLabel: { color: COLORS.muted } }], series: [{ name: '净利润', type: 'bar', data: contribution.return_bins.map(row => ({ value: row.net_pnl, itemStyle: { color: row.net_pnl >= 0 ? COLORS.green : COLORS.red } })), barMaxWidth: 46 }, { name: '交易笔数', type: 'line', yAxisIndex: 1, data: contribution.return_bins.map(row => row.trade_count), lineStyle: { color: COLORS.blue, width: 1.6 }, itemStyle: { color: COLORS.blue }, symbolSize: 6 }] });
+
+    const signedRoc = contribution.signed_roc;
+    const positiveRoc = signedRoc.directions.find(row => row.key === 'positive');
+    const negativeRoc = signedRoc.directions.find(row => row.key === 'negative');
+    document.getElementById('signed-roc-insight').innerHTML = `<strong>结论：</strong><span>买入次数几乎五五开，但利润来源并不对称。正ROC ${positiveRoc.buy_count} 次、负ROC ${negativeRoc.buy_count} 次；正ROC贡献 ${plainPct(positiveRoc.total_profit_share)} 的最终利润，负ROC贡献 ${plainPct(negativeRoc.total_profit_share)}。负ROC依靠较高命中率的短期反弹，正ROC依靠少数长期趋势右尾。</span>`;
+    const signedMetrics = [
+      ['正ROC买入', `${positiveRoc.buy_count}次`, `占 ${plainPct(positiveRoc.buy_share)}`, ''],
+      ['负ROC买入', `${negativeRoc.buy_count}次`, `占 ${plainPct(negativeRoc.buy_share)}`, ''],
+      ['正ROC完整利润', account(positiveRoc.total_pnl), `占最终利润 ${plainPct(positiveRoc.total_profit_share)}`, 'green'],
+      ['负ROC完整利润', account(negativeRoc.total_pnl), `占最终利润 ${plainPct(negativeRoc.total_profit_share)}`, 'green'],
+      ['正ROC止损率', plainPct(positiveRoc.stop_loss_rate), `${positiveRoc.stop_loss_count}笔`, ''],
+      ['负ROC止损率', plainPct(negativeRoc.stop_loss_rate), `${negativeRoc.stop_loss_count}笔`, 'red']
+    ];
+    document.getElementById('signed-roc-metrics').innerHTML = signedMetrics.map(([label, value, note, tone]) => `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value ${tone}">${value}</div><div class="metric-note">${note}</div></div>`).join('');
+
+    const rocDirectionChart = init('roc-direction-chart');
+    rocDirectionChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis' }, legend: { top: 5, textStyle: { color: COLORS.muted, fontSize: 10 } }, grid: { left: 52, right: 52, top: 45, bottom: 38 }, xAxis: { type: 'category', data: ['正ROC','负ROC'], ...axisStyle }, yAxis: [{ type: 'value', name: '利润', ...axisStyle }, { type: 'value', name: '买入次数', min: 0, splitLine: { show: false }, axisLabel: { color: COLORS.muted } }], series: [{ name: '已实现利润', type: 'bar', stack: 'pnl', data: [positiveRoc.realized_pnl, negativeRoc.realized_pnl], itemStyle: { color: COLORS.green }, tooltip: { valueFormatter: value => account(value) } }, { name: '未实现利润', type: 'bar', stack: 'pnl', data: [positiveRoc.unrealized_pnl, negativeRoc.unrealized_pnl], itemStyle: { color: COLORS.yellow }, tooltip: { valueFormatter: value => account(value) } }, { name: '买入次数', type: 'line', yAxisIndex: 1, data: [positiveRoc.buy_count, negativeRoc.buy_count], lineStyle: { color: COLORS.blue }, itemStyle: { color: COLORS.blue }, symbolSize: 7, tooltip: { valueFormatter: value => `${value}次` } }] });
+
+    const rocExitChart = init('roc-exit-chart');
+    rocExitChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis', valueFormatter: value => account(value) }, legend: { top: 5, textStyle: { color: COLORS.muted, fontSize: 10 } }, grid: { left: 52, right: 18, top: 45, bottom: 38 }, xAxis: { type: 'category', data: ['正ROC','负ROC'], ...axisStyle }, yAxis: { type: 'value', name: '已实现利润', ...axisStyle }, series: [{ name: '排名退出', type: 'bar', data: [positiveRoc.rank_exit_pnl, negativeRoc.rank_exit_pnl], itemStyle: { color: COLORS.green }, label: { show: true, position: 'outside', color: COLORS.muted, fontSize: 9, formatter: params => account(params.value, 2) } }, { name: '止损', type: 'bar', data: [positiveRoc.stop_loss_pnl, negativeRoc.stop_loss_pnl], itemStyle: { color: COLORS.red }, label: { show: true, position: 'outside', color: COLORS.muted, fontSize: 9, formatter: params => account(params.value, 2) } }] });
+
+    const rocHoldingChart = init('roc-holding-chart');
+    rocHoldingChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis', formatter: params => { const row = signedRoc.holding[params[0].dataIndex]; return `${row.bucket}<br>正ROC ${account(row.positive_pnl)}（${row.positive_count}笔）<br>负ROC ${account(row.negative_pnl)}（${row.negative_count}笔）`; } }, legend: { top: 5, textStyle: { color: COLORS.muted, fontSize: 10 } }, grid: { left: 52, right: 18, top: 45, bottom: 42 }, xAxis: { type: 'category', data: signedRoc.holding.map(row => row.bucket), axisLabel: { color: COLORS.muted, fontSize: 10 }, axisLine: axisStyle.axisLine, axisTick: { show: false } }, yAxis: { type: 'value', name: '已实现利润', ...axisStyle }, series: [{ name: '正ROC', type: 'bar', data: signedRoc.holding.map(row => ({ value: row.positive_pnl, itemStyle: { color: row.positive_pnl >= 0 ? COLORS.green : COLORS.red } })) }, { name: '负ROC', type: 'bar', data: signedRoc.holding.map(row => ({ value: row.negative_pnl, itemStyle: { color: row.negative_pnl >= 0 ? COLORS.blue : COLORS.red } })) }] });
+
+    const rocTailChart = init('roc-tail-chart');
+    const tailLabels = ['中位数','90%分位','95%分位','99%分位','最大单笔'];
+    rocTailChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis', valueFormatter: value => pct(value) }, legend: { top: 5, textStyle: { color: COLORS.muted, fontSize: 10 } }, grid: { left: 52, right: 18, top: 45, bottom: 42 }, xAxis: { type: 'category', data: tailLabels, axisLabel: { color: COLORS.muted, fontSize: 10 }, axisLine: axisStyle.axisLine, axisTick: { show: false } }, yAxis: { type: 'value', name: '排名退出收益', axisLabel: { color: COLORS.muted, formatter: value => `${(value * 100).toFixed(0)}%` }, splitLine: axisStyle.splitLine }, series: [{ name: '正ROC', type: 'bar', data: [positiveRoc.rank_exit_median_return, positiveRoc.rank_exit_p90, positiveRoc.rank_exit_p95, positiveRoc.rank_exit_p99, positiveRoc.rank_exit_max], itemStyle: { color: COLORS.green } }, { name: '负ROC', type: 'bar', data: [negativeRoc.rank_exit_median_return, negativeRoc.rank_exit_p90, negativeRoc.rank_exit_p95, negativeRoc.rank_exit_p99, negativeRoc.rank_exit_max], itemStyle: { color: COLORS.blue } }] });
+
+    document.getElementById('roc-exit-table').innerHTML = signedRoc.exit_rows.map(row => `<tr><td>${row.direction_label}</td><td>${row.reason_label}</td><td class="num">${row.count}</td><td class="num">${plainPct(row.share_within_direction)}</td><td class="num">${plainPct(row.win_rate)}</td><td class="num ${row.average_return >= 0 ? 'positive' : 'negative'}">${pct(row.average_return)}</td><td class="num ${row.median_return >= 0 ? 'positive' : 'negative'}">${pct(row.median_return)}</td><td class="num">${number(row.average_holding, 1)}天</td><td class="num ${row.realized_pnl >= 0 ? 'positive' : 'negative'}">${account(row.realized_pnl)}</td></tr>`).join('');
+    const negativeShort = signedRoc.holding.filter(row => ['1-5天','6-10天'].includes(row.bucket)).reduce((sum, row) => sum + row.negative_pnl, 0);
+    const positiveLong = signedRoc.holding.filter(row => ['21-60天','60天以上'].includes(row.bucket)).reduce((sum, row) => sum + row.positive_pnl, 0);
+    document.getElementById('negative-roc-mechanism').textContent = `${negativeRoc.rank_exit_count}笔排名退出中胜率 ${plainPct(negativeRoc.rank_exit_win_rate)}、中位收益 ${pct(negativeRoc.rank_exit_median_return)}；前10天贡献 ${account(negativeShort)}。代价是止损率 ${plainPct(negativeRoc.stop_loss_rate)}，高于正ROC。`;
+    document.getElementById('positive-roc-mechanism').textContent = `排名退出胜率仅 ${plainPct(positiveRoc.rank_exit_win_rate)}、中位收益 ${pct(positiveRoc.rank_exit_median_return)}，但21天以上贡献 ${account(positiveLong)}，最大单笔 ${pct(positiveRoc.rank_exit_max)}，形成主要右尾。`;
+
+    const attributionChart = init('attribution-chart');
+    const attributionTable = document.getElementById('attribution-table');
+    function renderAttribution(dimension) {
+      const rows = contribution.attribution[dimension];
+      const chartRows = dimension === 'etf' ? rows.slice(0, 15) : rows;
+      attributionChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: params => { const row = chartRows[params[0].dataIndex]; return `${row.label}<br>已实现净利润 <b>${account(row.net_pnl)}</b><br>毛盈利 ${account(row.gross_profit)}<br>毛亏损 ${account(row.gross_loss)}<br>${row.trade_count}笔 · 胜率 ${plainPct(row.win_rate)}<br>平均收益率 ${pct(row.average_return)}`; } }, grid: { left: dimension === 'etf' ? 190 : 100, right: 28, top: 20, bottom: 34 }, xAxis: { type: 'value', name: '已实现净利润', ...axisStyle }, yAxis: { type: 'category', inverse: true, data: chartRows.map(row => row.label), axisLabel: { color: COLORS.muted, width: dimension === 'etf' ? 170 : 85, overflow: 'truncate', fontSize: 10 }, axisLine: axisStyle.axisLine, axisTick: { show: false } }, series: [{ type: 'bar', barMaxWidth: 18, data: chartRows.map(row => ({ value: row.net_pnl, itemStyle: { color: row.net_pnl >= 0 ? COLORS.green : COLORS.red } })), label: { show: true, position: 'outside', color: COLORS.muted, fontSize: 9, formatter: params => account(params.value, 2) } }] }, true);
+      attributionTable.innerHTML = rows.map(row => `<tr><td>${row.label}</td><td class="num ${row.net_pnl >= 0 ? 'positive' : 'negative'}">${account(row.net_pnl)}</td><td class="num positive">${account(row.gross_profit)}</td><td class="num negative">${account(row.gross_loss)}</td><td class="num">${row.trade_count}</td><td class="num">${plainPct(row.win_rate)}</td><td class="num ${row.average_return >= 0 ? 'positive' : 'negative'}">${pct(row.average_return)}</td></tr>`).join('');
+    }
+    document.getElementById('attribution-controls').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; button.parentElement.querySelectorAll('button').forEach(node => node.classList.toggle('active', node === button)); renderAttribution(button.dataset.dimension); });
+    renderAttribution('etf');
+
+    const histChart = init('trade-hist-chart');
+    histChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'axis', formatter: params => `${params[0].name}<br><b>${params[0].value}笔</b>` }, grid: { left: 46, right: 14, top: 20, bottom: 62 }, xAxis: { type: 'category', data: REPORT.trade_histogram.map(row => row.label), axisLabel: { color: COLORS.muted, rotate: 55, fontSize: 9 }, axisLine: axisStyle.axisLine, axisTick: { show: false } }, yAxis: { type: 'value', ...axisStyle }, series: [{ type: 'bar', data: REPORT.trade_histogram.map(row => ({ value: row.count, itemStyle: { color: row.positive ? COLORS.green : COLORS.red } })), barMaxWidth: 18 }] });
+
+    const scatterChart = init('trade-scatter-chart');
+    scatterChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, formatter: params => { const row = REPORT.trade_scatter[params.dataIndex]; return `${row.symbol} ${row.name}<br>${row.date} · ${reasonLabel[row.reason]}<br>持有 ${row.holding_days} 天<br><b>${pct(row.pnl_pct)}</b>`; } }, grid: { left: 50, right: 18, top: 20, bottom: 42 }, xAxis: { type: 'value', name: '持有日历天数', ...axisStyle }, yAxis: { type: 'value', name: '收益', axisLabel: { color: COLORS.muted, formatter: value => `${(value * 100).toFixed(0)}%` }, splitLine: axisStyle.splitLine }, series: [{ type: 'scatter', symbolSize: 6, data: REPORT.trade_scatter.map(row => [row.holding_days, row.pnl_pct]), itemStyle: { color: params => params.value[1] >= 0 ? COLORS.green : COLORS.red, opacity: .65 } }] });
+
+    const exitChart = init('exit-chart');
+    exitChart.setOption({ animation: false, textStyle: baseText, tooltip: { ...tooltipStyle, trigger: 'item', formatter: params => `${params.name}<br><b>${params.value}笔 (${params.percent}%)</b>` }, legend: { bottom: 12, textStyle: { color: COLORS.muted, fontSize: 11 } }, series: [{ type: 'pie', radius: ['42%','67%'], center: ['50%','45%'], label: { formatter: '{d}%', color: COLORS.text }, data: [{ name: '排名退出', value: REPORT.exit_reasons.rank_exit, itemStyle: { color: COLORS.blue } }, { name: '止损', value: REPORT.exit_reasons.stop_loss, itemStyle: { color: COLORS.red } }] }] });
+
+    document.getElementById('etf-table').innerHTML = REPORT.etf_stats.map(row => `<tr><td>${row.symbol}</td><td>${row.name}</td><td class="num">${row.held_days}</td><td class="num">${row.buy_count}</td><td class="num">${row.closed_count}</td><td class="num ${row.average_closed_return >= 0 ? 'positive' : 'negative'}">${pct(row.average_closed_return)}</td></tr>`).join('');
+    document.getElementById('drawdown-table').innerHTML = REPORT.drawdowns.map(row => `<tr data-peak="${row.peak_date}" data-end="${row.recovery_date || REPORT.identity.date_end}"><td>${row.peak_date}</td><td>${row.trough_date}</td><td>${row.recovery_date || '尚未恢复'}</td><td class="num negative">${plainPct(Math.abs(row.drawdown))}</td><td class="num">${row.duration_days}</td><td>${row.status === 'recovered' ? '已恢复' : '进行中'}</td></tr>`).join('');
+    document.getElementById('drawdown-table').addEventListener('click', event => { const row = event.target.closest('tr'); if (!row) return; document.getElementById('overview').scrollIntoView(); const start = REPORT.path.dates.findIndex(date => date >= row.dataset.peak); const end = REPORT.path.dates.findIndex(date => date >= row.dataset.end); mainChart.dispatchAction({ type: 'dataZoom', startValue: Math.max(0, start - 10), endValue: end < 0 ? REPORT.path.dates.length - 1 : Math.min(REPORT.path.dates.length - 1, end + 10) }); });
+
+    const years = [...new Set(REPORT.trades.map(row => row.date.slice(0,4)))].sort().reverse();
+    document.getElementById('trade-year').insertAdjacentHTML('beforeend', years.map(year => `<option value="${year}">${year}</option>`).join(''));
+    const tradeBody = document.getElementById('trade-table');
+    const tradeStatus = document.getElementById('trade-status');
+    const controls = ['trade-search','trade-action','trade-roc-direction','trade-reason','trade-year'].map(id => document.getElementById(id));
+    function renderTrades() {
+      const query = controls[0].value.trim().toLowerCase(); const action = controls[1].value; const rocDirection = controls[2].value; const reason = controls[3].value; const year = controls[4].value;
+      const filtered = REPORT.trades.filter(row => (!query || `${row.symbol} ${row.name}`.toLowerCase().includes(query)) && (action === 'all' || row.action === action) && (rocDirection === 'all' || row.entry_direction === rocDirection) && (reason === 'all' || row.reason === reason) && (year === 'all' || row.date.startsWith(year)));
+      const shown = filtered.slice(0, 250);
+      tradeBody.innerHTML = shown.length ? shown.map(row => `<tr><td>${row.date}</td><td class="${row.action === 'BUY' ? 'positive' : 'negative'}">${actionLabel[row.action]}</td><td>${row.symbol}</td><td>${row.name}</td><td>${row.entry_direction === 'positive' ? '正ROC' : '负ROC'}</td><td class="num ${row.entry_roc40 >= 0 ? 'positive' : 'negative'}">${pct(row.entry_roc40)}</td><td>${reasonLabel[row.reason]}</td><td>${row.decision_date}</td><td class="num">${number(row.price, 3)}</td><td class="num">${number(row.notional, 3)}</td><td class="num ${row.pnl_pct == null ? '' : row.pnl_pct >= 0 ? 'positive' : 'negative'}">${pct(row.pnl_pct)}</td><td class="num ${row.realized_pnl == null ? '' : row.realized_pnl >= 0 ? 'positive' : 'negative'}">${account(row.realized_pnl)}</td></tr>`).join('') : '<tr><td colspan="12" class="empty">没有符合条件的交易</td></tr>';
+      tradeStatus.textContent = `符合条件 ${filtered.length} 条${filtered.length > shown.length ? `，当前显示前 ${shown.length} 条` : ''}`;
+    }
+    controls.forEach(control => control.addEventListener(control.tagName === 'INPUT' ? 'input' : 'change', renderTrades));
+    renderTrades();
+
+    document.getElementById('identity').innerHTML = `<div>协议：<code>${REPORT.identity.protocol_id}</code></div><div>数据集：<code>${REPORT.identity.dataset_id}</code></div><div>result.json：<code>${REPORT.identity.source_hashes.result}</code></div><div>daily.csv：<code>${REPORT.identity.source_hashes.daily}</code></div><div>trades.csv：<code>${REPORT.identity.source_hashes.trades}</code></div><div>初始化信号日：<code>${REPORT.identity.prior_signal_date}</code></div>`;
+    window.addEventListener('resize', () => charts.forEach(chart => chart.resize()));
+  </script>
+</body>
+</html>

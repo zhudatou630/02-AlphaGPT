@@ -1,0 +1,65 @@
+{
+  "schema_version": "etf-v3a-roc40-directional-comparison-v1",
+  "protocol_id": "0bf365de5abe99133be29cafa244c42c2ab6c465345c232db069512396475693",
+  "name": "v3a-roc40-directional-comparison-2017-current",
+  "interpretation": {
+    "exploratory_only": true,
+    "designed_after_absroc40_results_read": true,
+    "formal_winner_allowed": false,
+    "parameter_selection_allowed": false,
+    "changes_stage_d_outcome": false
+  },
+  "formulas": [
+    {
+      "id": "roc_40",
+      "text": "ROC(40)",
+      "transform": "identity"
+    },
+    {
+      "id": "neg_roc_40",
+      "text": "NEG(ROC(40))",
+      "transform": "negative"
+    },
+    {
+      "id": "abs_roc_40",
+      "text": "ABS(ROC(40))",
+      "transform": "absolute",
+      "role": "existing_control"
+    }
+  ],
+  "split": {
+    "start": "2017-01-03",
+    "end": "2026-07-10",
+    "prior_signal_date": "2016-12-30",
+    "continuous_path": true,
+    "annual_reset": false,
+    "calendar_years": [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+  },
+  "trading": {
+    "initial_cash": 1.0,
+    "min_universe": 10,
+    "slots": 3,
+    "buy_rank": 3,
+    "hold_rank": 5,
+    "robust_z_threshold": 1.5,
+    "stop_loss": -0.07,
+    "transaction_cost_bps": 0.0,
+    "cash_return": 0.0,
+    "max_holding_days": null,
+    "allow_fractional_shares": true,
+    "signal_dtype": "float32",
+    "execution_device": "cpu"
+  },
+  "comparison": {
+    "same_trading_rules_required": true,
+    "primary_metrics": [
+      "total_return",
+      "annualized_return",
+      "max_drawdown",
+      "calendar_year_returns",
+      "average_cash_weight",
+      "trade_count"
+    ],
+    "interpretation": "descriptive_historical_value_add_not_clean_oos_selection"
+  }
+}

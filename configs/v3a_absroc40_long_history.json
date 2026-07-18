@@ -1,0 +1,39 @@
+{
+  "schema_version": "etf-v3a-absroc40-long-history-v1",
+  "protocol_id": "87e7351dc0e64ed192457cffad78e3728805af538357783a2ba296f386430301",
+  "name": "v3a-absroc40-long-history-2017-current",
+  "interpretation": {
+    "exploratory_only": true,
+    "formal_winner_allowed": false,
+    "window_selection_allowed": false,
+    "changes_stage_d_outcome": false
+  },
+  "formula": {
+    "text": "ABS(ROC(40))",
+    "token_ids": [5, 15, 21],
+    "token_names": ["ROC", "WIN_40", "ABS"]
+  },
+  "split": {
+    "start": "2017-01-03",
+    "end": "2026-07-10",
+    "prior_signal_date": "2016-12-30",
+    "continuous_path": true,
+    "annual_reset": false,
+    "calendar_years": [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+  },
+  "trading": {
+    "initial_cash": 1.0,
+    "min_universe": 10,
+    "slots": 3,
+    "buy_rank": 3,
+    "hold_rank": 5,
+    "robust_z_threshold": 1.5,
+    "stop_loss": -0.07,
+    "transaction_cost_bps": 0.0,
+    "cash_return": 0.0,
+    "max_holding_days": null,
+    "allow_fractional_shares": true,
+    "signal_dtype": "float32",
+    "execution_device": "cpu"
+  }
+}

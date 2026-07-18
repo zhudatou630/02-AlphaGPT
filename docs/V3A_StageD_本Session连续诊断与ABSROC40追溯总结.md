@@ -536,6 +536,13 @@ docs/V3A_StageD_2023plus探索性诊断结果.md
 docs/V3A_StageD_2022至今连续结果与公式语义分析.md
 ```
 
+ABS(ROC40)后续长周期回测、交易归因与完整机制分析：
+
+```text
+docs/V3A_ABSROC40_完整回测与机制分析.md
+docs/reports/ABSROC40_长周期回测可视化.html
+```
+
 本session工程入口：
 
 ```text
