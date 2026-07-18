@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
 import numpy as np
@@ -9,6 +12,13 @@ from alpha_etf.research_v3a.validation import (
     ValidationConfig,
     decide_validation,
     run_formula_validation,
+)
+from alpha_etf.research_v3a.factors import FACTOR_NAMES
+from alpha_etf.research_v3a.spec import sha256_file
+from alpha_etf.research_v3a.validation_view import (
+    VALIDATION_VIEW_SCHEMA_VERSION,
+    build_validation_view_manifest,
+    load_validation_view,
 )
 
 
@@ -144,6 +154,67 @@ class V3AValidationTests(unittest.TestCase):
         self.assertEqual(decision["outcome"], "winner")
         self.assertEqual(decision["winner"], "paired_simple")
         self.assertFalse(decision["upgrades"]["stable_complex"]["passed"])
+
+    def test_validation_view_is_physically_final_free_and_tamper_checked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            arrays = {
+                "factor_values": np.ones((len(FACTOR_NAMES), 2, 3), dtype=np.float64),
+                "absolute_open": np.ones((2, 3), dtype=np.float64),
+                "absolute_close": np.ones((2, 3), dtype=np.float64),
+                "tradable_mask": np.ones((2, 3), dtype=bool),
+                "symbols": np.asarray(["A", "B"]),
+                "dates": np.asarray(["2021-12-31", "2022-01-04", "2022-12-30"]),
+            }
+            files = {}
+            for name, value in arrays.items():
+                path = root / f"{name}.npy"
+                np.save(path, value, allow_pickle=False)
+                files[name] = {
+                    "path": path.name,
+                    "sha256": sha256_file(path),
+                    "shape": list(value.shape),
+                    "dtype": str(value.dtype),
+                }
+            manifest = build_validation_view_manifest(
+                {
+                    "schema_version": VALIDATION_VIEW_SCHEMA_VERSION,
+                    "protocol_id": "protocol",
+                    "approval_id": "approval",
+                    "preflight_binding_id": "binding",
+                    "source_dataset_id": "dataset",
+                    "source_panel_sha256": "panel",
+                    "source_dataset_manifest": {"symbols": ["A", "B"]},
+                    "code_commit": "commit",
+                    "code_fingerprint": "fingerprint",
+                    "split": {
+                        "signal_start": "2016-08-09",
+                        "validation_start": "2022-01-01",
+                        "validation_end": "2022-12-31",
+                        "data_end": "2022-12-31",
+                        "validation_columns_present": True,
+                        "final_columns_present": False,
+                    },
+                    "factor_names": list(FACTOR_NAMES),
+                    "factor_shape": list(arrays["factor_values"].shape),
+                    "mask_shape": list(arrays["tradable_mask"].shape),
+                    "date_start": "2021-12-31",
+                    "date_end": "2022-12-30",
+                    "files": files,
+                }
+            )
+            manifest_path = root / "validation_view_manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            view = load_validation_view(root)
+            self.assertEqual(view.dates[-1], pd.Timestamp("2022-12-30"))
+            dates_path = root / "dates.npy"
+            np.save(
+                dates_path,
+                np.asarray(["2021-12-31", "2022-01-04", "2023-01-03"]),
+                allow_pickle=False,
+            )
+            with self.assertRaisesRegex(RuntimeError, "SHA mismatch"):
+                load_validation_view(root)
 
 
 if __name__ == "__main__":
