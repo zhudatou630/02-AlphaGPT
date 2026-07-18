@@ -1,0 +1,79 @@
+{
+  "schema_version": "etf-v3a-stage-d-validation-protocol-v1",
+  "protocol_id": "30d07d673ab9a7b787f0d44f58249ab48666bfa21cab6a7911a82eb4b62aa675",
+  "name": "v3a-stage-d-validation-20260718",
+  "validation_run_approved": false,
+  "split": {
+    "candidate_start": "2016-08-09",
+    "candidate_end": "2021-12-31",
+    "validation_start": "2022-01-01",
+    "validation_end": "2022-12-31",
+    "final_start": "2023-01-01",
+    "validation_metrics_read": false,
+    "final_metrics_read": false
+  },
+  "sources": {
+    "transformer_protocol_id": "9f9cfbe379a7201fdc6156d3b6f866156d788fc54c6bce0c84dce4d4dbf0a3ca",
+    "transformer_binding_id": "dc37a173f2fa7daec5aeeb543883ddfca12d9dc0c1981a8209e2e90ca2b9f86c",
+    "train_view_id": "v3a-train-view-0dceecd129115f1b",
+    "transformer_seeds": [101, 102, 103],
+    "random_protocol_id": "02cca48d1c8536f90a23a0e0361cb45e64a30e95623afc05ef58bd57a0dca5c1",
+    "random_prefix_attempts": {
+      "101": 1519926,
+      "102": 1434125,
+      "103": 1480379
+    },
+    "canonical_unique_targets": {
+      "101": 1418275,
+      "102": 1338626,
+      "103": 1381295
+    }
+  },
+  "candidate_policy": {
+    "curation_rule_version": "etf-v3a-display-simplifier-v1",
+    "curation_reward_tolerance": 0.000005,
+    "original_count_per_seed": 50,
+    "cuda_reserve_count_per_seed": 100,
+    "retained_per_length_bucket": 500,
+    "short_subtree_max_tokens": 10,
+    "subperiods": {
+      "S1": ["2016-08-09", "2018-05-24"],
+      "S2": ["2018-05-25", "2020-03-06"],
+      "S3": ["2020-03-09", "2021-12-16"]
+    }
+  },
+  "numerical_gate": {
+    "full_reward_abs_tolerance": 0.000001,
+    "min_coverage": 0.95,
+    "constant_std_eps": 0.000000000001,
+    "min_scorer_days": 252,
+    "cpu_gpu_topk_exact": true,
+    "cuda_audit_gpu_class": "rtx_pro_6000",
+    "formal_validation_device": "cpu",
+    "formal_signal_dtype": "float32"
+  },
+  "trading": {
+    "initial_cash": 1.0,
+    "min_universe": 10,
+    "slots": 3,
+    "buy_rank": 3,
+    "hold_rank": 5,
+    "robust_z_threshold": 1.5,
+    "stop_loss": -0.07,
+    "transaction_cost_bps": 0.0,
+    "cash_return": 0.0,
+    "max_holding_days": null,
+    "allow_fractional_shares": true
+  },
+  "decision": {
+    "quantile_method": "linear",
+    "survival_seed_count": 2,
+    "max_drawdown_limit": 0.2,
+    "right_tail_quantile": 0.75,
+    "upgrade_mean_advantage": 0.03,
+    "upgrade_winning_seed_count": 2,
+    "default_order": ["paired_simple", "stable_complex", "original_top50"],
+    "random_mean_advantage": 0.03,
+    "random_winning_seed_count": 2
+  }
+}
