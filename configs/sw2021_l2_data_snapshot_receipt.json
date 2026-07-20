@@ -1,0 +1,34 @@
+{
+  "schema_version": "sw2021-l2-data-snapshot-receipt-v1",
+  "classification_level": "L2",
+  "classification_version": "SW2021",
+  "identity_config": "configs/sw_industry_l2_sw2021_identity.json",
+  "identity_config_sha256": "0f74eb754db14b662d5b14360a35c719c24d03ffda743a22db62e6858f16cc22",
+  "identity_policy": "CURRENTLY_PUBLISHED_SW2021_L2_ONLY",
+  "raw_snapshot": {
+    "snapshot_id": "sw2021-l2-current-history-20160909-20260717-20260719T073545Z",
+    "local_path": "data/raw/sw_industry_l2/sw2021_backcast/snapshots/sw2021-l2-current-history-20160909-20260717-20260719T073545Z",
+    "manifest_sha256": "82f26a7cebc962ee10a98b3751a2314a5f45b9c38f869afbf77a84872770f126",
+    "quote_sha256": "622d03d8ac7c0b4cd34a926786242645c58012f46dbfb80b767705b1434edffd",
+    "classification_sha256": "ed33bb1143cbbfd0117117afdffbf9c438c6fd0e49ab4ad9cbf76601dd5ff217",
+    "calendar_sha256": "6558f6e5058725d7fea4b39010fb6c8915a31b633fcc4c7e48128932c76d1161"
+  },
+  "governed_snapshot": {
+    "governed_id": "governed-v1-sw2021-l2-current-history-20160909-20260717-20260719T073545Z",
+    "local_path": "data/processed/sw_industry_l2/sw2021_backcast/governed_snapshots/governed-v1-sw2021-l2-current-history-20160909-20260717-20260719T073545Z",
+    "manifest_sha256": "bdcd5979612ca153d646838eebfc13fe8616b4184b19f82b2f3f073c615b00e4",
+    "governed_quote_sha256": "0142f486278a462ec597965c966037f01bb258552cc232138531e2755c89be0f",
+    "quality_report_sha256": "ed576128b1f663ca9d37a77e9ab32dcc60db156de1b749076ea818a0a66d68be",
+    "repair_audit_sha256": "2f1c4a84fc0c64b8b17f4ba06ff5cade83039139185ef1ec3c226e174125471f"
+  },
+  "panel_identity": {
+    "industry_count": 124,
+    "trading_day_count": 2389,
+    "row_count": 296236,
+    "date_start": "2016-09-09",
+    "date_end": "2026-07-17",
+    "series_semantics": "PUBLISHED_INDEX_LEVEL_VENDOR_CURRENT",
+    "historical_vintage_proven": false
+  },
+  "research_status": "DATA_ONLY_NOT_VALIDATION_PROTOCOL"
+}

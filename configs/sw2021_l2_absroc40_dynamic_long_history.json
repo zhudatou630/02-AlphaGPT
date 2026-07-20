@@ -1,0 +1,80 @@
+{
+  "protocol_id": "81a77d785f756628d0504bce970a8c9d3067567d117f09f5cc2e2cda4d04034f",
+  "schema_version": "sw2021-l2-absroc40-dynamic-long-history-v1",
+  "name": "sw2021-l2-absroc40-dynamic-long-history-2000-current",
+  "interpretation": {
+    "test_type": "sequential_exploratory_cross_granularity_long_history",
+    "hypothesis_informed_by_level1_result": true,
+    "current_identity_survivorship_and_backcast_acknowledged": true,
+    "industry_data_used_for_formula_selection": false,
+    "parameter_tuning_allowed": false,
+    "result_dependent_protocol_changes_allowed": false,
+    "executable_etf_strategy_claim": false,
+    "planned_run_count": 1
+  },
+  "dataset": {
+    "dataset_id": "sw2021-l2-dynamic-panel-da9ddfe15fdd",
+    "panel_sha256": "ccd5e27fbaae4508fa5f1baf9dbf0776d8bed74f10f0cba25a2968c25fd30320",
+    "availability_sha256": "8891af83569dcbba6d44190327080eeff246d966747e47479144967c7e6538dc",
+    "date_start": "2000-03-15",
+    "date_end": "2026-07-17",
+    "symbol_count": 124,
+    "identity_policy": "CURRENTLY_PUBLISHED_SW2021_L2_ONLY",
+    "entry_policy": "FIRST_VENDOR_QUOTE_WITH_PER_ASSET_ROC40_WARMUP_DOWNSTREAM",
+    "series_semantics": "PUBLISHED_INDEX_LEVEL_VENDOR_CURRENT",
+    "historical_vintage_proven": false
+  },
+  "formula": {
+    "text": "ABS(ROC(40))",
+    "factor": "ROC_40",
+    "absolute_value": true
+  },
+  "universe": {
+    "inventory": "124 currently published SW2021 L2 codes frozen before the run",
+    "ranking_eligibility": "finite quote at t and t-40 on the global SSE trading-date axis",
+    "warmup": "40 global exchange trading-day delay per asset; no valid-row compression",
+    "internal_gap_policy": "only frozen 801193.SI 2015-04-01 through 2015-06-30 gap is allowed; missing dates remain mask=false; pending sell orders wait for the next valid open; failed pending buy orders are canceled",
+    "first_quote_universe": 46,
+    "final_quote_universe": 124
+  },
+  "split": {
+    "data_start": "2000-03-15",
+    "prior_signal_date": "2000-05-17",
+    "validation_start": "2000-05-18",
+    "validation_end": "2026-07-17",
+    "continuous_path": true,
+    "annual_reset": false
+  },
+  "trading": {
+    "initial_cash": 1.0,
+    "min_universe": 10,
+    "slots": 3,
+    "buy_rank": 3,
+    "hold_rank": 5,
+    "robust_z_threshold": 1.5,
+    "stop_loss": -0.07,
+    "transaction_cost_bps": 0.0,
+    "cash_return": 0.0,
+    "max_holding_days": null,
+    "allow_fractional_shares": true,
+    "signal_dtype": "float32",
+    "execution": "t_close_decision_t_plus_1_open",
+    "annual_reset": false
+  },
+  "benchmark": {
+    "primary": "first validation day equal-weight open-to-close return; thereafter daily equal-weight close-to-close return of quote-available L2 industries",
+    "secondary": "initial_equal_weight_buy_and_hold_of_industries_available_at_first_validation_open",
+    "new_industries_enter_primary_benchmark_on_first_quote": true,
+    "signal_warmup_applied_to_primary_benchmark": false,
+    "first_day_return": "equal_weight_close_over_open_minus_one_for_quote_available_industries",
+    "subsequent_return": "equal_weight_current_close_over_previous_close_minus_one_for_industries_available_on_both_dates"
+  },
+  "data_usage": {
+    "signal_field": "close",
+    "execution_field": "open",
+    "valuation_field": "close",
+    "source_change_fields_used": false,
+    "source_flow_fields_used": false,
+    "source_high_field_used_by_formula_or_trading": false
+  }
+}

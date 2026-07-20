@@ -60,6 +60,12 @@ data/raw/v3/
 data/processed/v3/data_quality/
 data/processed/v3/governance/
 
+# Local-only Shenwan industry quote snapshots downloaded from Tushare.
+data/raw/sw_industry_l1/
+data/processed/sw_industry_l1/
+data/raw/sw_industry_l2/
+data/processed/sw_industry_l2/
+
 # V3A training runs, reports and artifacts are large local research outputs.
 data/processed/v3a/
 

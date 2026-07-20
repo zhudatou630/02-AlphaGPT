@@ -1,0 +1,35 @@
+{
+  "schema_version": "sw2021-l2-dynamic-validation-result-receipt-v1",
+  "protocol_id": "81a77d785f756628d0504bce970a8c9d3067567d117f09f5cc2e2cda4d04034f",
+  "protocol_sha256": "66cbe14a9a1ec449fba82983fa95ff734f9026f71e112f5541794ca8e79ec45e",
+  "frozen_receipt_sha256": "5a3a1768b639ffd7cda19cf697271afca0a436a42691e3758d43655a4ece033d",
+  "dataset_id": "sw2021-l2-dynamic-panel-da9ddfe15fdd",
+  "dataset_manifest_sha256": "ece30c83909cd89c7da18e22a64ebbdda5135bbe6c895898432015c42959ee79",
+  "panel_sha256": "ccd5e27fbaae4508fa5f1baf9dbf0776d8bed74f10f0cba25a2968c25fd30320",
+  "code_fingerprint": "373b06721f1b891195c0ba856828d26e22d5f2616177d937629fd8ba29c164cf",
+  "one_shot_claim": {
+    "path": "configs/validation_claims/81a77d785f756628d0504bce970a8c9d3067567d117f09f5cc2e2cda4d04034f.json",
+    "sha256": "8bd4400ff26f0fbd37f23a1aa8fdb96cf5b351ca405f539e73c9c7b684ce8b64"
+  },
+  "result": {
+    "local_path": ".pi/profile/results/sw2021-l2-absroc40-dynamic-long-history-20000518-20260717",
+    "result_json_sha256": "17311edb12269bfb61c5b8956de944c52b38a7fecc5e2c110ac0c4e90b2ad8ce",
+    "daily_csv_sha256": "8d89c5e01ce2220d941f1d688120e0a5f0e9575ab144159503ebf4b1fec985bc",
+    "trades_csv_sha256": "bdc71cb68dbbfc38dcb7a7fbffa4c785d8f6c713b78f13c9585f461651eff076",
+    "annual_summary_csv_sha256": "2573f20656aac6cf63c5373803b7123629d0601af23034b24edaff457fd406d8"
+  },
+  "headline_metrics": {
+    "date_start": "2000-05-18",
+    "date_end": "2026-07-17",
+    "strategy_total_return": 1.9536810728192622,
+    "strategy_annualized_return": 0.04393216502681829,
+    "strategy_max_drawdown": 0.7229545269694433,
+    "benchmark_total_return": 4.503508518069611,
+    "benchmark_annualized_return": 0.07004384618778525,
+    "benchmark_max_drawdown": 0.6986233351361049,
+    "buy_count": 2463,
+    "sell_count": 2460,
+    "closed_trade_win_rate": 0.4654471544715447
+  },
+  "research_status": "ONE_SHOT_COMPLETED_NO_RERUN"
+}

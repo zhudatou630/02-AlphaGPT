@@ -1,0 +1,94 @@
+{
+  "schema_version": "sw2021-l1-absroc40-cross-universe-validation-v1",
+  "protocol_id": "be4e2eb7166bccd384037fb140bcad8ef4453ead824b314866482d5548717b2c",
+  "name": "sw2021-l1-absroc40-cross-universe-validation-2014-current",
+  "interpretation": {
+    "test_type": "cross_universe_replication",
+    "industry_data_used_for_formula_selection": false,
+    "parameter_tuning_allowed": false,
+    "result_dependent_protocol_changes_allowed": false,
+    "executable_etf_strategy_claim": false,
+    "planned_run_count": 1
+  },
+  "dataset": {
+    "dataset_id": "sw2021-l1-panel-602e43638927",
+    "panel_sha256": "5bc081808bac9263720be42691eed2eb13e547b3b33ebedeb48743237cc9c3e6",
+    "date_start": "2014-02-21",
+    "date_end": "2026-07-17",
+    "symbols": [
+      "801010.SI",
+      "801030.SI",
+      "801040.SI",
+      "801050.SI",
+      "801080.SI",
+      "801110.SI",
+      "801120.SI",
+      "801130.SI",
+      "801140.SI",
+      "801150.SI",
+      "801160.SI",
+      "801170.SI",
+      "801180.SI",
+      "801200.SI",
+      "801210.SI",
+      "801230.SI",
+      "801710.SI",
+      "801720.SI",
+      "801730.SI",
+      "801740.SI",
+      "801750.SI",
+      "801760.SI",
+      "801770.SI",
+      "801780.SI",
+      "801790.SI",
+      "801880.SI",
+      "801890.SI",
+      "801950.SI",
+      "801960.SI",
+      "801970.SI",
+      "801980.SI"
+    ],
+    "series_semantics": "PUBLISHED_INDEX_LEVEL_VENDOR_CURRENT",
+    "historical_vintage_proven": false
+  },
+  "formula": {
+    "text": "ABS(ROC(40))",
+    "factor": "ROC_40",
+    "absolute_value": true
+  },
+  "split": {
+    "data_start": "2014-02-21",
+    "prior_signal_date": "2014-04-21",
+    "validation_start": "2014-04-22",
+    "validation_end": "2026-07-17",
+    "continuous_path": true,
+    "annual_reset": false
+  },
+  "trading": {
+    "initial_cash": 1.0,
+    "min_universe": 10,
+    "slots": 3,
+    "buy_rank": 3,
+    "hold_rank": 5,
+    "robust_z_threshold": 1.5,
+    "stop_loss": -0.07,
+    "transaction_cost_bps": 0.0,
+    "cash_return": 0.0,
+    "max_holding_days": null,
+    "allow_fractional_shares": true,
+    "signal_dtype": "float32",
+    "execution": "t_close_decision_t_plus_1_open",
+    "annual_reset": false
+  },
+  "benchmark": {
+    "primary": "daily_equal_weight_close_return_of_31_industries",
+    "secondary": "initial_equal_weight_buy_and_hold_from_first_validation_open"
+  },
+  "data_usage": {
+    "signal_field": "close",
+    "execution_field": "open",
+    "valuation_field": "close",
+    "source_change_fields_used": false,
+    "source_high_field_used_by_formula_or_trading": false
+  }
+}

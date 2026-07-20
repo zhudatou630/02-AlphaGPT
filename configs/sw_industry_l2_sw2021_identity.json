@@ -1,0 +1,963 @@
+{
+  "classification_effective_date": "2021-12-13",
+  "classification_level": "L2",
+  "classification_rows": 134,
+  "classification_version": "SW2021",
+  "excluded_unpublished_industries": [
+    {
+      "index_code": "801011.SI",
+      "industry_code": "110300",
+      "industry_name": "林业Ⅱ",
+      "is_pub": 0,
+      "parent_code": "110000"
+    },
+    {
+      "index_code": "801019.SI",
+      "industry_code": "110900",
+      "industry_name": "农业综合Ⅱ",
+      "is_pub": 0,
+      "parent_code": "110000"
+    },
+    {
+      "index_code": "801117.SI",
+      "industry_code": "330700",
+      "industry_name": "其他家电Ⅱ",
+      "is_pub": 0,
+      "parent_code": "330000"
+    },
+    {
+      "index_code": "801207.SI",
+      "industry_code": "450700",
+      "industry_name": "旅游零售Ⅱ",
+      "is_pub": 0,
+      "parent_code": "450000"
+    },
+    {
+      "index_code": "801216.SI",
+      "industry_code": "460600",
+      "industry_name": "体育Ⅱ",
+      "is_pub": 0,
+      "parent_code": "460000"
+    },
+    {
+      "index_code": "801217.SI",
+      "industry_code": "460700",
+      "industry_name": "本地生活服务Ⅱ",
+      "is_pub": 0,
+      "parent_code": "460000"
+    },
+    {
+      "index_code": "801768.SI",
+      "industry_code": "720800",
+      "industry_name": "社交Ⅱ",
+      "is_pub": 0,
+      "parent_code": "720000"
+    },
+    {
+      "index_code": "801786.SI",
+      "industry_code": "480600",
+      "industry_name": "其他银行Ⅱ",
+      "is_pub": 0,
+      "parent_code": "480000"
+    },
+    {
+      "index_code": "801961.SI",
+      "industry_code": "750100",
+      "industry_name": "油气开采Ⅱ",
+      "is_pub": 0,
+      "parent_code": "750000"
+    },
+    {
+      "index_code": "801983.SI",
+      "industry_code": "770300",
+      "industry_name": "医疗美容",
+      "is_pub": 0,
+      "parent_code": "770000"
+    }
+  ],
+  "identity_policy": "CURRENTLY_PUBLISHED_SW2021_L2_ONLY",
+  "published_industries": [
+    {
+      "index_code": "801012.SI",
+      "industry_code": "110500",
+      "industry_name": "农产品加工",
+      "is_pub": 1,
+      "parent_code": "110000"
+    },
+    {
+      "index_code": "801014.SI",
+      "industry_code": "110400",
+      "industry_name": "饲料",
+      "is_pub": 1,
+      "parent_code": "110000"
+    },
+    {
+      "index_code": "801015.SI",
+      "industry_code": "110200",
+      "industry_name": "渔业",
+      "is_pub": 1,
+      "parent_code": "110000"
+    },
+    {
+      "index_code": "801016.SI",
+      "industry_code": "110100",
+      "industry_name": "种植业",
+      "is_pub": 1,
+      "parent_code": "110000"
+    },
+    {
+      "index_code": "801017.SI",
+      "industry_code": "110700",
+      "industry_name": "养殖业",
+      "is_pub": 1,
+      "parent_code": "110000"
+    },
+    {
+      "index_code": "801018.SI",
+      "industry_code": "110800",
+      "industry_name": "动物保健Ⅱ",
+      "is_pub": 1,
+      "parent_code": "110000"
+    },
+    {
+      "index_code": "801032.SI",
+      "industry_code": "220400",
+      "industry_name": "化学纤维",
+      "is_pub": 1,
+      "parent_code": "220000"
+    },
+    {
+      "index_code": "801033.SI",
+      "industry_code": "220200",
+      "industry_name": "化学原料",
+      "is_pub": 1,
+      "parent_code": "220000"
+    },
+    {
+      "index_code": "801034.SI",
+      "industry_code": "220300",
+      "industry_name": "化学制品",
+      "is_pub": 1,
+      "parent_code": "220000"
+    },
+    {
+      "index_code": "801036.SI",
+      "industry_code": "220500",
+      "industry_name": "塑料",
+      "is_pub": 1,
+      "parent_code": "220000"
+    },
+    {
+      "index_code": "801037.SI",
+      "industry_code": "220600",
+      "industry_name": "橡胶",
+      "is_pub": 1,
+      "parent_code": "220000"
+    },
+    {
+      "index_code": "801038.SI",
+      "industry_code": "220800",
+      "industry_name": "农化制品",
+      "is_pub": 1,
+      "parent_code": "220000"
+    },
+    {
+      "index_code": "801039.SI",
+      "industry_code": "220900",
+      "industry_name": "非金属材料Ⅱ",
+      "is_pub": 1,
+      "parent_code": "220000"
+    },
+    {
+      "index_code": "801043.SI",
+      "industry_code": "230300",
+      "industry_name": "冶钢原料",
+      "is_pub": 1,
+      "parent_code": "230000"
+    },
+    {
+      "index_code": "801044.SI",
+      "industry_code": "230400",
+      "industry_name": "普钢",
+      "is_pub": 1,
+      "parent_code": "230000"
+    },
+    {
+      "index_code": "801045.SI",
+      "industry_code": "230500",
+      "industry_name": "特钢Ⅱ",
+      "is_pub": 1,
+      "parent_code": "230000"
+    },
+    {
+      "index_code": "801051.SI",
+      "industry_code": "240200",
+      "industry_name": "金属新材料",
+      "is_pub": 1,
+      "parent_code": "240000"
+    },
+    {
+      "index_code": "801053.SI",
+      "industry_code": "240400",
+      "industry_name": "贵金属",
+      "is_pub": 1,
+      "parent_code": "240000"
+    },
+    {
+      "index_code": "801054.SI",
+      "industry_code": "240500",
+      "industry_name": "小金属",
+      "is_pub": 1,
+      "parent_code": "240000"
+    },
+    {
+      "index_code": "801055.SI",
+      "industry_code": "240300",
+      "industry_name": "工业金属",
+      "is_pub": 1,
+      "parent_code": "240000"
+    },
+    {
+      "index_code": "801056.SI",
+      "industry_code": "240600",
+      "industry_name": "能源金属",
+      "is_pub": 1,
+      "parent_code": "240000"
+    },
+    {
+      "index_code": "801072.SI",
+      "industry_code": "640100",
+      "industry_name": "通用设备",
+      "is_pub": 1,
+      "parent_code": "640000"
+    },
+    {
+      "index_code": "801074.SI",
+      "industry_code": "640200",
+      "industry_name": "专用设备",
+      "is_pub": 1,
+      "parent_code": "640000"
+    },
+    {
+      "index_code": "801076.SI",
+      "industry_code": "640500",
+      "industry_name": "轨交设备Ⅱ",
+      "is_pub": 1,
+      "parent_code": "640000"
+    },
+    {
+      "index_code": "801077.SI",
+      "industry_code": "640600",
+      "industry_name": "工程机械",
+      "is_pub": 1,
+      "parent_code": "640000"
+    },
+    {
+      "index_code": "801078.SI",
+      "industry_code": "640700",
+      "industry_name": "自动化设备",
+      "is_pub": 1,
+      "parent_code": "640000"
+    },
+    {
+      "index_code": "801081.SI",
+      "industry_code": "270100",
+      "industry_name": "半导体",
+      "is_pub": 1,
+      "parent_code": "270000"
+    },
+    {
+      "index_code": "801082.SI",
+      "industry_code": "270400",
+      "industry_name": "其他电子Ⅱ",
+      "is_pub": 1,
+      "parent_code": "270000"
+    },
+    {
+      "index_code": "801083.SI",
+      "industry_code": "270200",
+      "industry_name": "元件",
+      "is_pub": 1,
+      "parent_code": "270000"
+    },
+    {
+      "index_code": "801084.SI",
+      "industry_code": "270300",
+      "industry_name": "光学光电子",
+      "is_pub": 1,
+      "parent_code": "270000"
+    },
+    {
+      "index_code": "801085.SI",
+      "industry_code": "270500",
+      "industry_name": "消费电子",
+      "is_pub": 1,
+      "parent_code": "270000"
+    },
+    {
+      "index_code": "801086.SI",
+      "industry_code": "270600",
+      "industry_name": "电子化学品Ⅱ",
+      "is_pub": 1,
+      "parent_code": "270000"
+    },
+    {
+      "index_code": "801092.SI",
+      "industry_code": "280300",
+      "industry_name": "汽车服务",
+      "is_pub": 1,
+      "parent_code": "280000"
+    },
+    {
+      "index_code": "801093.SI",
+      "industry_code": "280200",
+      "industry_name": "汽车零部件",
+      "is_pub": 1,
+      "parent_code": "280000"
+    },
+    {
+      "index_code": "801095.SI",
+      "industry_code": "280500",
+      "industry_name": "乘用车",
+      "is_pub": 1,
+      "parent_code": "280000"
+    },
+    {
+      "index_code": "801096.SI",
+      "industry_code": "280600",
+      "industry_name": "商用车",
+      "is_pub": 1,
+      "parent_code": "280000"
+    },
+    {
+      "index_code": "801101.SI",
+      "industry_code": "710100",
+      "industry_name": "计算机设备",
+      "is_pub": 1,
+      "parent_code": "710000"
+    },
+    {
+      "index_code": "801102.SI",
+      "industry_code": "730200",
+      "industry_name": "通信设备",
+      "is_pub": 1,
+      "parent_code": "730000"
+    },
+    {
+      "index_code": "801103.SI",
+      "industry_code": "710300",
+      "industry_name": "IT服务Ⅱ",
+      "is_pub": 1,
+      "parent_code": "710000"
+    },
+    {
+      "index_code": "801104.SI",
+      "industry_code": "710400",
+      "industry_name": "软件开发",
+      "is_pub": 1,
+      "parent_code": "710000"
+    },
+    {
+      "index_code": "801111.SI",
+      "industry_code": "330100",
+      "industry_name": "白色家电",
+      "is_pub": 1,
+      "parent_code": "330000"
+    },
+    {
+      "index_code": "801112.SI",
+      "industry_code": "330200",
+      "industry_name": "黑色家电",
+      "is_pub": 1,
+      "parent_code": "330000"
+    },
+    {
+      "index_code": "801113.SI",
+      "industry_code": "330300",
+      "industry_name": "小家电",
+      "is_pub": 1,
+      "parent_code": "330000"
+    },
+    {
+      "index_code": "801114.SI",
+      "industry_code": "330400",
+      "industry_name": "厨卫电器",
+      "is_pub": 1,
+      "parent_code": "330000"
+    },
+    {
+      "index_code": "801115.SI",
+      "industry_code": "330500",
+      "industry_name": "照明设备Ⅱ",
+      "is_pub": 1,
+      "parent_code": "330000"
+    },
+    {
+      "index_code": "801116.SI",
+      "industry_code": "330600",
+      "industry_name": "家电零部件Ⅱ",
+      "is_pub": 1,
+      "parent_code": "330000"
+    },
+    {
+      "index_code": "801124.SI",
+      "industry_code": "340400",
+      "industry_name": "食品加工",
+      "is_pub": 1,
+      "parent_code": "340000"
+    },
+    {
+      "index_code": "801125.SI",
+      "industry_code": "340500",
+      "industry_name": "白酒Ⅱ",
+      "is_pub": 1,
+      "parent_code": "340000"
+    },
+    {
+      "index_code": "801126.SI",
+      "industry_code": "340600",
+      "industry_name": "非白酒",
+      "is_pub": 1,
+      "parent_code": "340000"
+    },
+    {
+      "index_code": "801127.SI",
+      "industry_code": "340700",
+      "industry_name": "饮料乳品",
+      "is_pub": 1,
+      "parent_code": "340000"
+    },
+    {
+      "index_code": "801128.SI",
+      "industry_code": "340800",
+      "industry_name": "休闲食品",
+      "is_pub": 1,
+      "parent_code": "340000"
+    },
+    {
+      "index_code": "801129.SI",
+      "industry_code": "340900",
+      "industry_name": "调味发酵品Ⅱ",
+      "is_pub": 1,
+      "parent_code": "340000"
+    },
+    {
+      "index_code": "801131.SI",
+      "industry_code": "350100",
+      "industry_name": "纺织制造",
+      "is_pub": 1,
+      "parent_code": "350000"
+    },
+    {
+      "index_code": "801132.SI",
+      "industry_code": "350200",
+      "industry_name": "服装家纺",
+      "is_pub": 1,
+      "parent_code": "350000"
+    },
+    {
+      "index_code": "801133.SI",
+      "industry_code": "350300",
+      "industry_name": "饰品",
+      "is_pub": 1,
+      "parent_code": "350000"
+    },
+    {
+      "index_code": "801141.SI",
+      "industry_code": "360200",
+      "industry_name": "包装印刷",
+      "is_pub": 1,
+      "parent_code": "360000"
+    },
+    {
+      "index_code": "801142.SI",
+      "industry_code": "360300",
+      "industry_name": "家居用品",
+      "is_pub": 1,
+      "parent_code": "360000"
+    },
+    {
+      "index_code": "801143.SI",
+      "industry_code": "360100",
+      "industry_name": "造纸",
+      "is_pub": 1,
+      "parent_code": "360000"
+    },
+    {
+      "index_code": "801145.SI",
+      "industry_code": "360500",
+      "industry_name": "文娱用品",
+      "is_pub": 1,
+      "parent_code": "360000"
+    },
+    {
+      "index_code": "801151.SI",
+      "industry_code": "370100",
+      "industry_name": "化学制药",
+      "is_pub": 1,
+      "parent_code": "370000"
+    },
+    {
+      "index_code": "801152.SI",
+      "industry_code": "370300",
+      "industry_name": "生物制品",
+      "is_pub": 1,
+      "parent_code": "370000"
+    },
+    {
+      "index_code": "801153.SI",
+      "industry_code": "370500",
+      "industry_name": "医疗器械",
+      "is_pub": 1,
+      "parent_code": "370000"
+    },
+    {
+      "index_code": "801154.SI",
+      "industry_code": "370400",
+      "industry_name": "医药商业",
+      "is_pub": 1,
+      "parent_code": "370000"
+    },
+    {
+      "index_code": "801155.SI",
+      "industry_code": "370200",
+      "industry_name": "中药Ⅱ",
+      "is_pub": 1,
+      "parent_code": "370000"
+    },
+    {
+      "index_code": "801156.SI",
+      "industry_code": "370600",
+      "industry_name": "医疗服务",
+      "is_pub": 1,
+      "parent_code": "370000"
+    },
+    {
+      "index_code": "801161.SI",
+      "industry_code": "410100",
+      "industry_name": "电力",
+      "is_pub": 1,
+      "parent_code": "410000"
+    },
+    {
+      "index_code": "801163.SI",
+      "industry_code": "410300",
+      "industry_name": "燃气Ⅱ",
+      "is_pub": 1,
+      "parent_code": "410000"
+    },
+    {
+      "index_code": "801178.SI",
+      "industry_code": "420800",
+      "industry_name": "物流",
+      "is_pub": 1,
+      "parent_code": "420000"
+    },
+    {
+      "index_code": "801179.SI",
+      "industry_code": "420900",
+      "industry_name": "铁路公路",
+      "is_pub": 1,
+      "parent_code": "420000"
+    },
+    {
+      "index_code": "801181.SI",
+      "industry_code": "430100",
+      "industry_name": "房地产开发",
+      "is_pub": 1,
+      "parent_code": "430000"
+    },
+    {
+      "index_code": "801183.SI",
+      "industry_code": "430300",
+      "industry_name": "房地产服务",
+      "is_pub": 1,
+      "parent_code": "430000"
+    },
+    {
+      "index_code": "801191.SI",
+      "industry_code": "490300",
+      "industry_name": "多元金融",
+      "is_pub": 1,
+      "parent_code": "490000"
+    },
+    {
+      "index_code": "801193.SI",
+      "industry_code": "490100",
+      "industry_name": "证券Ⅱ",
+      "is_pub": 1,
+      "parent_code": "490000"
+    },
+    {
+      "index_code": "801194.SI",
+      "industry_code": "490200",
+      "industry_name": "保险Ⅱ",
+      "is_pub": 1,
+      "parent_code": "490000"
+    },
+    {
+      "index_code": "801202.SI",
+      "industry_code": "450200",
+      "industry_name": "贸易Ⅱ",
+      "is_pub": 1,
+      "parent_code": "450000"
+    },
+    {
+      "index_code": "801203.SI",
+      "industry_code": "450300",
+      "industry_name": "一般零售",
+      "is_pub": 1,
+      "parent_code": "450000"
+    },
+    {
+      "index_code": "801204.SI",
+      "industry_code": "450400",
+      "industry_name": "专业连锁Ⅱ",
+      "is_pub": 1,
+      "parent_code": "450000"
+    },
+    {
+      "index_code": "801206.SI",
+      "industry_code": "450600",
+      "industry_name": "互联网电商",
+      "is_pub": 1,
+      "parent_code": "450000"
+    },
+    {
+      "index_code": "801218.SI",
+      "industry_code": "460800",
+      "industry_name": "专业服务",
+      "is_pub": 1,
+      "parent_code": "460000"
+    },
+    {
+      "index_code": "801219.SI",
+      "industry_code": "460900",
+      "industry_name": "酒店餐饮",
+      "is_pub": 1,
+      "parent_code": "460000"
+    },
+    {
+      "index_code": "801223.SI",
+      "industry_code": "730100",
+      "industry_name": "通信服务",
+      "is_pub": 1,
+      "parent_code": "730000"
+    },
+    {
+      "index_code": "801231.SI",
+      "industry_code": "510100",
+      "industry_name": "综合Ⅱ",
+      "is_pub": 1,
+      "parent_code": "510000"
+    },
+    {
+      "index_code": "801711.SI",
+      "industry_code": "610100",
+      "industry_name": "水泥",
+      "is_pub": 1,
+      "parent_code": "610000"
+    },
+    {
+      "index_code": "801712.SI",
+      "industry_code": "610200",
+      "industry_name": "玻璃玻纤",
+      "is_pub": 1,
+      "parent_code": "610000"
+    },
+    {
+      "index_code": "801713.SI",
+      "industry_code": "610300",
+      "industry_name": "装修建材",
+      "is_pub": 1,
+      "parent_code": "610000"
+    },
+    {
+      "index_code": "801721.SI",
+      "industry_code": "620100",
+      "industry_name": "房屋建设Ⅱ",
+      "is_pub": 1,
+      "parent_code": "620000"
+    },
+    {
+      "index_code": "801722.SI",
+      "industry_code": "620200",
+      "industry_name": "装修装饰Ⅱ",
+      "is_pub": 1,
+      "parent_code": "620000"
+    },
+    {
+      "index_code": "801723.SI",
+      "industry_code": "620300",
+      "industry_name": "基础建设",
+      "is_pub": 1,
+      "parent_code": "620000"
+    },
+    {
+      "index_code": "801724.SI",
+      "industry_code": "620400",
+      "industry_name": "专业工程",
+      "is_pub": 1,
+      "parent_code": "620000"
+    },
+    {
+      "index_code": "801726.SI",
+      "industry_code": "620600",
+      "industry_name": "工程咨询服务Ⅱ",
+      "is_pub": 1,
+      "parent_code": "620000"
+    },
+    {
+      "index_code": "801731.SI",
+      "industry_code": "630100",
+      "industry_name": "电机Ⅱ",
+      "is_pub": 1,
+      "parent_code": "630000"
+    },
+    {
+      "index_code": "801733.SI",
+      "industry_code": "630300",
+      "industry_name": "其他电源设备Ⅱ",
+      "is_pub": 1,
+      "parent_code": "630000"
+    },
+    {
+      "index_code": "801735.SI",
+      "industry_code": "630500",
+      "industry_name": "光伏设备",
+      "is_pub": 1,
+      "parent_code": "630000"
+    },
+    {
+      "index_code": "801736.SI",
+      "industry_code": "630600",
+      "industry_name": "风电设备",
+      "is_pub": 1,
+      "parent_code": "630000"
+    },
+    {
+      "index_code": "801737.SI",
+      "industry_code": "630700",
+      "industry_name": "电池",
+      "is_pub": 1,
+      "parent_code": "630000"
+    },
+    {
+      "index_code": "801738.SI",
+      "industry_code": "630800",
+      "industry_name": "电网设备",
+      "is_pub": 1,
+      "parent_code": "630000"
+    },
+    {
+      "index_code": "801741.SI",
+      "industry_code": "650100",
+      "industry_name": "航天装备Ⅱ",
+      "is_pub": 1,
+      "parent_code": "650000"
+    },
+    {
+      "index_code": "801742.SI",
+      "industry_code": "650200",
+      "industry_name": "航空装备Ⅱ",
+      "is_pub": 1,
+      "parent_code": "650000"
+    },
+    {
+      "index_code": "801743.SI",
+      "industry_code": "650300",
+      "industry_name": "地面兵装Ⅱ",
+      "is_pub": 1,
+      "parent_code": "650000"
+    },
+    {
+      "index_code": "801744.SI",
+      "industry_code": "650400",
+      "industry_name": "航海装备Ⅱ",
+      "is_pub": 1,
+      "parent_code": "650000"
+    },
+    {
+      "index_code": "801745.SI",
+      "industry_code": "650500",
+      "industry_name": "军工电子Ⅱ",
+      "is_pub": 1,
+      "parent_code": "650000"
+    },
+    {
+      "index_code": "801764.SI",
+      "industry_code": "720400",
+      "industry_name": "游戏Ⅱ",
+      "is_pub": 1,
+      "parent_code": "720000"
+    },
+    {
+      "index_code": "801765.SI",
+      "industry_code": "720500",
+      "industry_name": "广告营销",
+      "is_pub": 1,
+      "parent_code": "720000"
+    },
+    {
+      "index_code": "801766.SI",
+      "industry_code": "720600",
+      "industry_name": "影视院线",
+      "is_pub": 1,
+      "parent_code": "720000"
+    },
+    {
+      "index_code": "801767.SI",
+      "industry_code": "720700",
+      "industry_name": "数字媒体",
+      "is_pub": 1,
+      "parent_code": "720000"
+    },
+    {
+      "index_code": "801769.SI",
+      "industry_code": "720900",
+      "industry_name": "出版",
+      "is_pub": 1,
+      "parent_code": "720000"
+    },
+    {
+      "index_code": "801782.SI",
+      "industry_code": "480200",
+      "industry_name": "国有大型银行Ⅱ",
+      "is_pub": 1,
+      "parent_code": "480000"
+    },
+    {
+      "index_code": "801783.SI",
+      "industry_code": "480300",
+      "industry_name": "股份制银行Ⅱ",
+      "is_pub": 1,
+      "parent_code": "480000"
+    },
+    {
+      "index_code": "801784.SI",
+      "industry_code": "480400",
+      "industry_name": "城商行Ⅱ",
+      "is_pub": 1,
+      "parent_code": "480000"
+    },
+    {
+      "index_code": "801785.SI",
+      "industry_code": "480500",
+      "industry_name": "农商行Ⅱ",
+      "is_pub": 1,
+      "parent_code": "480000"
+    },
+    {
+      "index_code": "801881.SI",
+      "industry_code": "280400",
+      "industry_name": "摩托车及其他",
+      "is_pub": 1,
+      "parent_code": "280000"
+    },
+    {
+      "index_code": "801951.SI",
+      "industry_code": "740100",
+      "industry_name": "煤炭开采",
+      "is_pub": 1,
+      "parent_code": "740000"
+    },
+    {
+      "index_code": "801952.SI",
+      "industry_code": "740200",
+      "industry_name": "焦炭Ⅱ",
+      "is_pub": 1,
+      "parent_code": "740000"
+    },
+    {
+      "index_code": "801962.SI",
+      "industry_code": "750200",
+      "industry_name": "油服工程",
+      "is_pub": 1,
+      "parent_code": "750000"
+    },
+    {
+      "index_code": "801963.SI",
+      "industry_code": "750300",
+      "industry_name": "炼化及贸易",
+      "is_pub": 1,
+      "parent_code": "750000"
+    },
+    {
+      "index_code": "801971.SI",
+      "industry_code": "760100",
+      "industry_name": "环境治理",
+      "is_pub": 1,
+      "parent_code": "760000"
+    },
+    {
+      "index_code": "801972.SI",
+      "industry_code": "760200",
+      "industry_name": "环保设备Ⅱ",
+      "is_pub": 1,
+      "parent_code": "760000"
+    },
+    {
+      "index_code": "801981.SI",
+      "industry_code": "770100",
+      "industry_name": "个护用品",
+      "is_pub": 1,
+      "parent_code": "770000"
+    },
+    {
+      "index_code": "801982.SI",
+      "industry_code": "770200",
+      "industry_name": "化妆品",
+      "is_pub": 1,
+      "parent_code": "770000"
+    },
+    {
+      "index_code": "801991.SI",
+      "industry_code": "421000",
+      "industry_name": "航空机场",
+      "is_pub": 1,
+      "parent_code": "420000"
+    },
+    {
+      "index_code": "801992.SI",
+      "industry_code": "421100",
+      "industry_name": "航运港口",
+      "is_pub": 1,
+      "parent_code": "420000"
+    },
+    {
+      "index_code": "801993.SI",
+      "industry_code": "461000",
+      "industry_name": "旅游及景区",
+      "is_pub": 1,
+      "parent_code": "460000"
+    },
+    {
+      "index_code": "801994.SI",
+      "industry_code": "461100",
+      "industry_name": "教育",
+      "is_pub": 1,
+      "parent_code": "460000"
+    },
+    {
+      "index_code": "801995.SI",
+      "industry_code": "721000",
+      "industry_name": "电视广播Ⅱ",
+      "is_pub": 1,
+      "parent_code": "720000"
+    }
+  ],
+  "published_industry_count": 124,
+  "published_parent_count": 31,
+  "research_object": "Shenwan SW2021 level-2 currently published industry indices",
+  "schema_version": "sw2021-l2-identity-v1",
+  "source": {
+    "captured_at_utc": "2026-07-19T07:33:02.455560+00:00",
+    "endpoint": "index_classify",
+    "params": {
+      "level": "L2",
+      "src": "SW2021"
+    },
+    "provider": "Tushare"
+  },
+  "unpublished_industry_count": 10
+}
