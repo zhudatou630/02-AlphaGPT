@@ -33,6 +33,12 @@ Thumbs.db
 .pi/local/
 AGENTS.md
 
+# Generated profiling evidence and transient monitor state. Keep the
+# human-readable profile notes and reproducible scripts under version control.
+.pi/profile/results/
+.pi/watch/state/
+.pi/watch/incidents/
+
 # External reference checkout contains its own .git and a hardcoded token file.
 # Keep it local; use the upstream/fork URL as the source of truth instead.
 references/AlphaGPT/
