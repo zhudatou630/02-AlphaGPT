@@ -37,6 +37,7 @@ def git_commit() -> str:
 
 def code_paths() -> list[Path]:
     paths = sorted((ROOT / "src/alpha_etf/research_v3a").glob("*.py"))
+    paths.append(ROOT / "src/alpha_etf/data/event_adjustment.py")
     paths.append(ROOT / "src/alpha_etf/gpt/policy.py")
     paths.extend(sorted((ROOT / "scripts/v3a").glob("*.py")))
     paths.extend(sorted((ROOT / "scripts/v3a").glob("*.sh")))

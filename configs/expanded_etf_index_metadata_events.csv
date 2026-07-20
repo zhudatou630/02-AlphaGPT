@@ -1,0 +1,4 @@
+ts_code,event_date,event_type,old_index_code,new_index_code,old_index_name,new_index_name,canonical_variety_id,evidence_url,requires_roc_reset,notes
+159902.SZ,20100412,index_code_adjustment,399329.SZ,399005.SZ,中小企业板价格指数,中小企业板价格指数,399005.SZ,https://www.cnindex.com.cn/zh_information/notices_news/2010/201206/P020191213351658971861.pdf,false,Same economic index; official code normalization
+159917.SZ,20140102,index_short_name_change,399602.SZ,399602.SZ,中小板300成长指数,中小板300成长指数,399602.SZ,https://pdf.dfcfw.com/pdf/H2_AN201401040004867247_1.pdf,false,Only the index abbreviation changed from SME300成长 to 中小成长
+512760.SH,20200616,index_name_change,990001.OTH,990001.OTH,中华交易服务半导体行业指数,中华交易服务半导体芯片行业指数,990001.OTH,https://pdf.dfcfw.com/pdf/H2_AN202006111384083746_1.pdf,false,Index provider renamed the same index

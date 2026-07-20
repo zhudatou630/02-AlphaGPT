@@ -1,0 +1,4 @@
+ts_code,effective_date,event_type,successor_code,successor_name,resulting_scope,source_url,evidence_type,notes
+159917.SZ,2015-08-27,fund_transformation,,国泰国证新能源汽车指数分级证券投资基金,excluded_structured_fund,https://pdf.dfcfw.com/pdf/H2_AN201507300010344590_1.pdf,official_fund_resolution_mirror,未退出的ETF份额默认转为场内国泰新汽车份额并按1比1分离为A/B份额
+159927.SZ,2018-02-14,fund_transformation,,鹏华量化先锋混合型证券投资基金,excluded_active_fund,https://pdf.dfcfw.com/pdf/H2_AN201712071063751099_1.pdf,official_fund_resolution_mirror,ETF退市后转换为场外主动混合基金份额并需确权
+510820.SH,2019-08-19,fund_merger,510810.SH,中证上海国企ETF,included_domestic_passive_equity,https://pdf.dfcfw.com/pdf/H2_AN201908141343916663_1.pdf,official_fund_announcement_mirror,按转换基准日两基金份额净值之比转换为510810且不是现金清算

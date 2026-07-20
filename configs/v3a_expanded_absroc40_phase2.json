@@ -1,0 +1,105 @@
+{
+  "schema_version": "etf-v3a-expanded-absroc40-phase2-v1",
+  "protocol_id": "6a698d8bc523725e6f2edda15c24f684757a37a5d06acc21947714b45c7c79d5",
+  "name": "v3a-expanded-absroc40-2010-20260720",
+  "interpretation": {
+    "exploratory_only": true,
+    "selection_sensitivity": true,
+    "new_out_of_sample_proof": false,
+    "parameter_changes_after_results": false
+  },
+  "split": {
+    "start": "2010-07-28",
+    "end": "2026-07-20",
+    "prior_signal_date": "2010-07-27",
+    "continuous_path": true,
+    "annual_reset": false
+  },
+  "formula": {
+    "text": "ABS(ROC(40))",
+    "window": 40,
+    "signal_dtype": "float32"
+  },
+  "universe": {
+    "unit": "official_index_variety",
+    "daily_deduplication": "one_representative_product_per_variety",
+    "representative_rule": "earliest_listed_then_successor_only_after_termination",
+    "warmup_closes": 41,
+    "real_index_change_resets_warmup": true,
+    "metadata_change_resets_warmup": false,
+    "min_universe": 10,
+    "historical_identity_policy": "accept_current_official_identity_projected_back_as_exploratory_approximation"
+  },
+  "prices": {
+    "signal": "event_qfq_close",
+    "execution": "event_qfq_open",
+    "valuation": "event_qfq_close",
+    "raw_ohlc_allowed": false,
+    "tdx_builtin_qfq_allowed": false
+  },
+  "terminal_events": {
+    "main_cashflow_policy": "announcement_direct_per_share_only",
+    "derived_cashflow_policy": "exclude_from_main_and_reserve_for_sensitivity",
+    "missing_cashflow_policy": "exclude_from_investable_universe",
+    "non_cash_lifecycle_policy": "exclude_from_investable_universe",
+    "cash_recognition": "after_open_before_close_on_first_exchange_day_on_or_after_payment_date_reusable_next_open",
+    "interim_valuation": "last_tradable_close_less_cash_already_received_per_share",
+    "position_close": "final_direct_payment",
+    "excluded_products": [
+      "159503",
+      "159789",
+      "159815",
+      "159911",
+      "159917",
+      "159921",
+      "159924",
+      "159932",
+      "159942",
+      "159946",
+      "159951",
+      "159953",
+      "159962",
+      "159986",
+      "159990",
+      "510820"
+    ]
+  },
+  "strategies": [
+    {
+      "id": "slots3_enter3_exit5",
+      "slots": 3,
+      "buy_rank": 3,
+      "hold_rank": 5
+    },
+    {
+      "id": "slots5_enter5_exit8",
+      "slots": 5,
+      "buy_rank": 5,
+      "hold_rank": 8
+    }
+  ],
+  "shared_trading": {
+    "initial_cash": 1.0,
+    "robust_z_threshold": 1.5,
+    "stop_loss": -0.07,
+    "decision": "close",
+    "execution": "next_open",
+    "max_holding_days": null,
+    "transaction_cost_bps": 0.0,
+    "cash_return": 0.0,
+    "allow_fractional_shares": true
+  },
+  "benchmark": {
+    "type": "monthly_equal_weight",
+    "universe": "same_daily_warmed_up_variety_set",
+    "rebalance": "first_trading_day_of_month_at_open_using_previous_close_eligibility",
+    "initialization": "first_open_after_previous_close_has_min_universe",
+    "transaction_cost_bps": 0.0
+  },
+  "controls": {
+    "retain_original_35_result": true,
+    "update_original_35_control_through": "2026-07-20",
+    "original_35_start": "2017-01-03",
+    "original_35_prior_signal_date": "2016-12-30"
+  }
+}

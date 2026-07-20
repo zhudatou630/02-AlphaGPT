@@ -47,6 +47,23 @@ type GbbqRow struct {
 	C4           float64 `json:"c4"`
 }
 
+type CoverageRow struct {
+	Symbol            string   `json:"symbol"`
+	Name              string   `json:"name"`
+	DailyStatus       string   `json:"daily_status"`
+	DailyError        string   `json:"daily_error,omitempty"`
+	RawRowCount       int      `json:"raw_row_count"`
+	ValidRowCount     int      `json:"valid_row_count"`
+	FirstRawDate      string   `json:"first_raw_date,omitempty"`
+	LastRawDate       string   `json:"last_raw_date,omitempty"`
+	FirstValidDate    string   `json:"first_valid_date,omitempty"`
+	Observation41Date string   `json:"observation_41_date,omitempty"`
+	ValidDates        []string `json:"valid_dates,omitempty"`
+	EventStatus       string   `json:"event_status"`
+	EventError        string   `json:"event_error,omitempty"`
+	EventCount        int      `json:"event_count"`
+}
+
 var universe = []ETF{
 	{"510050", "上证50ETF", "broad", "large_value"},
 	{"510300", "沪深300ETF", "broad", "csi300"},
@@ -71,6 +88,8 @@ func main() {
 	outDir := flag.String("out", filepath.Join("data", "staging"), "output staging directory")
 	start := flag.String("start", "2010-01-01", "inclusive start date")
 	universePath := flag.String("universe", "", "optional JSON universe file")
+	coverageOut := flag.String("coverage-out", "", "optional identity-only coverage JSONL; skips price export")
+	eventsOnly := flag.Bool("events-only", false, "export gbbq events without requiring daily prices")
 	flag.Parse()
 
 	startDate, err := time.Parse(time.DateOnly, *start)
@@ -78,15 +97,47 @@ func main() {
 		fatalf("invalid -start: %v", err)
 	}
 
-	if err := os.MkdirAll(*outDir, 0755); err != nil {
-		fatalf("create output directory: %v", err)
-	}
 	exportUniverse := universe
 	if *universePath != "" {
 		exportUniverse, err = loadUniverse(*universePath)
 		if err != nil {
 			fatalf("load universe: %v", err)
 		}
+	}
+	client, err := tdx.DialDefault(tdx.WithRedial())
+	if err != nil {
+		fatalf("dial TDX: %v", err)
+	}
+	defer client.Close()
+	if *coverageOut != "" {
+		if err := os.MkdirAll(filepath.Dir(*coverageOut), 0755); err != nil {
+			fatalf("create coverage directory: %v", err)
+		}
+		coverageFile := mustCreate(*coverageOut)
+		defer coverageFile.Close()
+		if err := auditCoverage(client, exportUniverse, startDate, json.NewEncoder(coverageFile)); err != nil {
+			fatalf("audit coverage: %v", err)
+		}
+		return
+	}
+	if *eventsOnly {
+		if err := os.MkdirAll(*outDir, 0755); err != nil {
+			fatalf("create output directory: %v", err)
+		}
+		gbbqFile := mustCreate(filepath.Join(*outDir, "tdx_gbbq_events.jsonl"))
+		defer gbbqFile.Close()
+		gbbqEnc := json.NewEncoder(gbbqFile)
+		for _, etf := range exportUniverse {
+			if err := exportETFEvents(client, etf, gbbqEnc); err != nil {
+				fatalf("export events %s %s: %v", etf.Symbol, etf.Name, err)
+			}
+			fmt.Fprintf(os.Stderr, "exported events %s %s\n", etf.Symbol, etf.Name)
+		}
+		return
+	}
+
+	if err := os.MkdirAll(*outDir, 0755); err != nil {
+		fatalf("create output directory: %v", err)
 	}
 
 	bfqFile := mustCreate(filepath.Join(*outDir, "tdx_daily_bfq.jsonl"))
@@ -100,18 +151,93 @@ func main() {
 	qfqEnc := json.NewEncoder(qfqFile)
 	gbbqEnc := json.NewEncoder(gbbqFile)
 
-	client, err := tdx.DialDefault(tdx.WithRedial())
-	if err != nil {
-		fatalf("dial TDX: %v", err)
-	}
-	defer client.Close()
-
 	for _, etf := range exportUniverse {
 		if err := exportETF(client, etf, startDate, bfqEnc, qfqEnc, gbbqEnc); err != nil {
 			fatalf("export %s %s: %v", etf.Symbol, etf.Name, err)
 		}
 		fmt.Fprintf(os.Stderr, "exported %s %s\n", etf.Symbol, etf.Name)
 	}
+}
+
+func exportETFEvents(client *tdx.Client, etf ETF, encoder *json.Encoder) error {
+	code := tdxSymbol(etf.Symbol)
+	response, err := client.GetGbbq(code)
+	if err != nil {
+		return fmt.Errorf("get gbbq: %w", err)
+	}
+	if response == nil {
+		return fmt.Errorf("nil gbbq response")
+	}
+	for _, event := range response.List {
+		if event == nil {
+			continue
+		}
+		if err := encoder.Encode(GbbqRow{
+			Date:         event.Time.Format(time.DateOnly),
+			Symbol:       etf.Symbol,
+			TDXSymbol:    code,
+			CategoryCode: event.Category,
+			C1:           event.C1,
+			C2:           event.C2,
+			C3:           event.C3,
+			C4:           event.C4,
+		}); err != nil {
+			return fmt.Errorf("write gbbq: %w", err)
+		}
+	}
+	return nil
+}
+
+func auditCoverage(client *tdx.Client, items []ETF, startDate time.Time, encoder *json.Encoder) error {
+	for _, etf := range items {
+		row := CoverageRow{Symbol: etf.Symbol, Name: etf.Name, DailyStatus: "error", EventStatus: "error"}
+		code := tdxSymbol(etf.Symbol)
+		resp, err := client.GetKlineDayAll(code)
+		if err != nil {
+			row.DailyError = err.Error()
+		} else if resp == nil || len(resp.List) == 0 {
+			row.DailyError = "empty day kline"
+		} else {
+			sort.Slice(resp.List, func(i, j int) bool { return resp.List[i].Time.Before(resp.List[j].Time) })
+			row.DailyStatus = "ok"
+			for _, value := range resp.List {
+				if value == nil || value.Time.Before(startDate) {
+					continue
+				}
+				date := value.Time.Format(time.DateOnly)
+				row.RawRowCount++
+				if row.FirstRawDate == "" {
+					row.FirstRawDate = date
+				}
+				row.LastRawDate = date
+				if value.Open.Float64() <= 0 || value.High.Float64() <= 0 || value.Low.Float64() <= 0 || value.Close.Float64() <= 0 || value.Volume <= 0 || value.Amount.Float64() <= 0 {
+					continue
+				}
+				row.ValidRowCount++
+				row.ValidDates = append(row.ValidDates, date)
+				if row.FirstValidDate == "" {
+					row.FirstValidDate = date
+				}
+				if row.ValidRowCount == 41 {
+					row.Observation41Date = date
+				}
+			}
+		}
+		gbbq, eventErr := client.GetGbbq(code)
+		if eventErr != nil {
+			row.EventError = eventErr.Error()
+		} else if gbbq == nil {
+			row.EventError = "nil gbbq response"
+		} else {
+			row.EventStatus = "ok"
+			row.EventCount = len(gbbq.List)
+		}
+		if err := encoder.Encode(row); err != nil {
+			return fmt.Errorf("write coverage %s: %w", etf.Symbol, err)
+		}
+		fmt.Fprintf(os.Stderr, "audited %s %s daily=%s events=%s\n", etf.Symbol, etf.Name, row.DailyStatus, row.EventStatus)
+	}
+	return nil
 }
 
 func loadUniverse(path string) ([]ETF, error) {

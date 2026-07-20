@@ -68,6 +68,14 @@ class EventAdjustmentTests(unittest.TestCase):
         np.testing.assert_allclose(adjusted["event_qfq_close"], [20.0, 20.0, 20.0])
         np.testing.assert_allclose(adjusted["event_adjusted_volume"], [50.0, 60.0, 60.0])
 
+    def test_category_12_uses_same_share_multiplier_rule(self) -> None:
+        daily = _daily([10.0, 10.0, 5.0], [100.0, 120.0, 240.0])
+        events = _event("2024-01-04", 12, c3=2.0)
+        adjusted = apply_event_adjustments(daily, build_event_audit(daily, events))
+
+        np.testing.assert_allclose(adjusted["event_qfq_close"], [5.0, 5.0, 5.0])
+        np.testing.assert_allclose(adjusted["event_adjusted_volume"], [200.0, 240.0, 240.0])
+
     def test_cash_dividend_preserves_pre_event_returns(self) -> None:
         daily = _daily([9.0, 10.0, 9.0])
         events = _event("2024-01-04", 1, c1=10.0)
@@ -108,6 +116,23 @@ class EventAdjustmentTests(unittest.TestCase):
 
         self.assertEqual(audit.iloc[0]["effective_trade_date"], pd.Timestamp("2024-01-08"))
         self.assertEqual(adjusted.iloc[1]["applied_event_count"], 1)
+
+    def test_multiple_events_before_one_trade_are_composed_in_order(self) -> None:
+        daily = _daily([6.159, 2.3344])
+        daily.loc[1, "date"] = pd.Timestamp("2024-12-02")
+        events = pd.concat(
+            [
+                _event("2024-12-01", 11, c3=2.5),
+                _event("2024-12-02", 1, c1=1.292),
+            ],
+            ignore_index=True,
+        )
+        audit = build_event_audit(daily, events)
+        adjusted = apply_event_adjustments(daily, audit)
+
+        np.testing.assert_allclose(adjusted["event_qfq_close"], [2.3344, 2.3344])
+        self.assertEqual(audit["event_sequence_count"].tolist(), [2, 2])
+        self.assertAlmostEqual(audit.iloc[-1]["adjusted_event_return"], 0.0)
 
     def test_quality_gate_rejects_negative_volume(self) -> None:
         daily = _daily([10.0, 10.1], [100.0, -1.0])

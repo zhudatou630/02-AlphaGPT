@@ -142,12 +142,6 @@ def build_event_audit(raw: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     event_data["symbol"] = event_data["symbol"].astype(str)
     event_data = event_data.sort_values(["symbol", "date", "category_code"]).reset_index(drop=True)
 
-    supported = event_data[event_data["category_code"].isin(SUPPORTED_EVENT_CATEGORIES)]
-    duplicates = supported.duplicated(["symbol", "date"], keep=False)
-    if duplicates.any():
-        examples = supported.loc[duplicates, ["symbol", "date", "category_code"]].to_dict("records")
-        raise ValueError(f"Multiple adjustment events on one symbol/date require manual composition: {examples}")
-
     daily_by_symbol = {symbol: group.reset_index(drop=True) for symbol, group in daily.groupby("symbol")}
     rows: list[dict[str, object]] = []
     for event in event_data.to_dict("records"):
@@ -232,7 +226,60 @@ def build_event_audit(raw: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
         )
         rows.append(row)
 
-    return pd.DataFrame(rows)
+    audit = pd.DataFrame(rows)
+    audit["event_sequence_index"] = 1
+    audit["event_sequence_count"] = 1
+    audit["cumulative_share_step"] = audit["share_step"]
+    applied = audit[audit["applied"].astype(bool)]
+    for _, group in applied.groupby(["symbol", "effective_trade_date"], sort=False):
+        order = group.assign(
+            event_order=group["category_code"].map({11: 0, 12: 0, 1: 1}).fillna(2)
+        ).sort_values(["date", "event_order"])
+        reference = float(order.iloc[0]["previous_close"])
+        previous_raw_volume = float(order.iloc[0]["previous_raw_volume"])
+        effective_close = float(order.iloc[0]["effective_close"])
+        effective_raw_volume = float(order.iloc[0]["effective_raw_volume"])
+        cumulative_share_step = 1.0
+        count = len(order)
+        for sequence, (index, event) in enumerate(order.iterrows(), start=1):
+            adjustment = _event_adjustment(event, reference)
+            cumulative_share_step *= adjustment.share_step
+            previous_volume_on_post_event_units = (
+                previous_raw_volume * cumulative_share_step
+            )
+            audit.loc[index, [
+                "event_sequence_index",
+                "event_sequence_count",
+                "previous_close",
+                "price_step",
+                "share_step",
+                "cumulative_share_step",
+                "theoretical_ex_close",
+                "previous_volume_on_post_event_units",
+                "adjusted_volume_event_ratio",
+                "adjusted_event_return",
+            ]] = [
+                sequence,
+                count,
+                reference,
+                adjustment.price_step,
+                adjustment.share_step,
+                cumulative_share_step,
+                adjustment.theoretical_ex_close,
+                previous_volume_on_post_event_units,
+                (
+                    effective_raw_volume / previous_volume_on_post_event_units
+                    if previous_volume_on_post_event_units > 0
+                    else np.nan
+                ),
+                (
+                    effective_close / adjustment.theoretical_ex_close - 1.0
+                    if sequence == count
+                    else np.nan
+                ),
+            ]
+            reference = adjustment.theoretical_ex_close
+    return audit
 
 
 def apply_event_adjustments(raw: pd.DataFrame, event_audit: pd.DataFrame) -> pd.DataFrame:

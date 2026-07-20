@@ -65,3 +65,6 @@ data/processed/v3a/
 
 # Per-product market inventory CSVs include Tushare liquidity/share fields.
 data/processed/etf_market_inventory/*.csv
+
+# Expanded-universe source snapshots and phase-one audit artifacts are local-only.
+data/processed/expanded_etf_audit/

@@ -30,6 +30,7 @@ class Position:
     entry_price: float
     entry_date: str
     entry_decision_date: str
+    terminal_cash_received_per_share: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -120,7 +121,10 @@ def _portfolio_value(
         price = last_closes[position.symbol_idx]
         if not (np.isfinite(price) and price > 0):
             price = position.entry_price
-        value += position.qty * price
+        residual_price = max(
+            float(price) - position.terminal_cash_received_per_share, 0.0
+        )
+        value += position.qty * residual_price
     return float(value)
 
 
@@ -193,14 +197,18 @@ def run_formula_validation(
     dates: pd.DatetimeIndex,
     symbols: np.ndarray,
     config: ValidationConfig = ValidationConfig(),
+    terminal_cashflows: pd.DataFrame | None = None,
+    execution_mask: np.ndarray | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     """Run one frozen formula from the prior close through validation year-end."""
 
     shape = tradable_mask.shape
+    execution = tradable_mask if execution_mask is None else execution_mask
     if (
         signal.shape != shape
         or open_prices.shape != shape
         or close_prices.shape != shape
+        or execution.shape != shape
         or shape != (len(symbols), len(dates))
     ):
         raise ValueError("Validation arrays have inconsistent shapes")
@@ -221,6 +229,44 @@ def run_formula_validation(
     prior = int(prior_indices[-1])
     if dates[int(validation_indices[-1])] > pd.Timestamp(config.validation_end):
         raise RuntimeError("Validation runner exposed dates after the frozen boundary")
+
+    terminal_by_day: dict[int, list[tuple[int, float, bool, str]]] = {}
+    if terminal_cashflows is not None and not terminal_cashflows.empty:
+        required_terminal = {
+            "fund_code",
+            "payment_date",
+            "cash_per_share",
+            "is_final_payment",
+            "evidence_type",
+        }
+        missing_terminal = required_terminal - set(terminal_cashflows.columns)
+        if missing_terminal:
+            raise ValueError(
+                f"Terminal cashflows missing columns: {sorted(missing_terminal)}"
+            )
+        symbol_lookup = {str(symbol): index for index, symbol in enumerate(symbols)}
+        for row in terminal_cashflows.itertuples(index=False):
+            symbol = str(row.fund_code)
+            if symbol not in symbol_lookup:
+                raise ValueError(f"Terminal cashflow symbol is absent from panel: {symbol}")
+            candidates = np.flatnonzero(dates >= pd.Timestamp(row.payment_date))
+            if not len(candidates):
+                continue
+            day = int(candidates[0])
+            final_value = row.is_final_payment
+            is_final = (
+                bool(final_value)
+                if isinstance(final_value, (bool, np.bool_))
+                else str(final_value).strip().lower() == "true"
+            )
+            terminal_by_day.setdefault(day, []).append(
+                (
+                    symbol_lookup[symbol],
+                    float(row.cash_per_share),
+                    is_final,
+                    str(row.evidence_type),
+                )
+            )
 
     positions: list[Position | None] = [None] * config.slots
     blocked_symbols: set[int] = set()
@@ -254,7 +300,7 @@ def run_formula_validation(
                 pending_exits.pop(slot)
                 continue
             price = open_t[position.symbol_idx]
-            if not (tradable_mask[position.symbol_idx, t] and np.isfinite(price) and price > 0):
+            if not (execution[position.symbol_idx, t] and np.isfinite(price) and price > 0):
                 continue
             proceeds = position.qty * float(price)
             cash += proceeds
@@ -292,7 +338,7 @@ def run_formula_validation(
                 continue
             price = open_t[order.symbol_idx]
             if not (
-                tradable_mask[order.symbol_idx, t]
+                execution[order.symbol_idx, t]
                 and np.isfinite(price)
                 and price > 0
                 and cash_slice > 0
@@ -326,6 +372,44 @@ def run_formula_validation(
                 }
             )
         pending_entries = []
+
+        for symbol_idx, cash_per_share, is_final, evidence_type in terminal_by_day.get(
+            t, []
+        ):
+            for slot, position in enumerate(positions):
+                if position is None or position.symbol_idx != symbol_idx:
+                    continue
+                cash_amount = position.qty * cash_per_share
+                cash += cash_amount
+                position.terminal_cash_received_per_share += cash_per_share
+                trade_rows.append(
+                    {
+                        "formula_id": formula_id,
+                        "date": date,
+                        "action": "TERMINAL_CASH" if is_final else "DISTRIBUTION",
+                        "symbol": str(symbols[symbol_idx]),
+                        "slot": slot,
+                        "price": cash_per_share,
+                        "qty": position.qty,
+                        "notional": cash_amount,
+                        "reason": "terminal_final_payment"
+                        if is_final
+                        else "terminal_partial_payment",
+                        "decision_date": "",
+                        "entry_date": position.entry_date,
+                        "pnl_pct": (
+                            position.terminal_cash_received_per_share
+                            / position.entry_price
+                            - 1.0
+                            if is_final
+                            else np.nan
+                        ),
+                        "evidence_type": evidence_type,
+                    }
+                )
+                if is_final:
+                    positions[slot] = None
+                    pending_exits.pop(slot, None)
 
         close_t = close_prices[:, t]
         usable_close = np.isfinite(close_t) & (close_t > 0)
