@@ -1,9 +1,0 @@
-{
-  "check": "ssh autodl-898 'bash /root/02-AlphaGPT/.pi-watch-check-s101.sh'",
-  "session": "019f5f0e-8341-7d49-923a-8535d580ab11",
-  "name": "formal-s101",
-  "timeout": 120,
-  "provider": "zai-coding-cn",
-  "modelId": "glm-5.2",
-  "thinkingLevel": "medium"
-}
