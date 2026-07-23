@@ -1,0 +1,16 @@
+02-AlphaGPT
+Copyright 2026 zhudatou630
+
+This project is an independent research codebase inspired by AlphaGPT.
+It is not the official AlphaGPT repository and is not affiliated with the
+original AlphaGPT authors.
+
+Upstream project referenced for ideas and implementation study:
+
+  AlphaGPT
+  https://github.com/imbue-bit/AlphaGPT
+  Licensed under the Apache License, Version 2.0
+
+This repository reimplements and extends formula-search ideas for a China
+A-share multi-ETF research setting. Keep this NOTICE and the Apache-2.0
+LICENSE with any redistribution.
